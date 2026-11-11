@@ -13,9 +13,9 @@ Optimus includes a local movement model and an offline recording/training pipeli
 
 These changes do not stop or start gameplay. Logging on while stopped arms the next normal start. Remote `!o ml` and `!o logging` commands require the controller role; operators cannot change them. Responses are brief.
 
-Fresh installations use shadow mode and recording off. Settings live in `config/optimus-ml.properties`; an example is in `ml/optimus-ml.properties.example`. Supported keys are `mode=off|shadow|live`, `confidence=0.35..0.99`, `fusion=hybrid|neural` and `record=true|false`. Existing `duelguard-ml.properties` preferences are read when the Optimus file is absent; subsequent changes write only the Optimus file. Unknown properties are preserved, and writes replace files atomically where supported.
+Fresh installations use shadow mode and recording off. Settings live in `config/optimus-ml.properties`; an example is in `ml/optimus-ml.properties.example`. Supported keys are `mode=off|shadow|live`, `confidence=0.35..0.99`, `fusion=hybrid|neural` and `record=true|false`. Unknown properties are preserved, and writes replace files atomically where supported.
 
-The primary override is `config/optimus-ml-model.dgml`. The legacy `duelguard-ml-model.txt` is also readable. Without a valid override, the bundled checkpoint is used and an override error is reported. An optional compatible second expert can be placed at `config/optimus-combat-model.dgml`; `fusion=neural` disables it and tactical fusion. No Python, GPU, network request or checkpoint download is needed in Minecraft.
+The primary override is `config/optimus-ml-model.dgml`. Without a valid override, the bundled checkpoint is used and an override error is reported. An optional compatible second expert can be placed at `config/optimus-combat-model.dgml`; `fusion=neural` disables it and tactical fusion. No Python, GPU, network request or checkpoint download is needed in Minecraft.
 
 ## Code boundaries
 
@@ -26,7 +26,7 @@ The primary override is `config/optimus-ml-model.dgml`. The legacy `duelguard-ml
 - `learning/LearningRuntime`: off/shadow/live inference and counters, independent of Minecraft.
 - `learning/LearningConfiguration`, `ModelRepository`, `LearningSession`: settings persistence, local model loading and lifecycle composition.
 - `learning/recording/CombatRecording`: observation-only recorder port; client adapters cannot open or close writer sessions.
-- `learning/recording/FightRecorder`: bounded asynchronous JSONL writer and anonymous life/opponent/outcome correlation, with no Minecraft imports.
+- `learning/recording/FightRecorder`: anonymous life, opponent and outcome correlation. `RecordingWriter` owns the bounded JSONL queue, file rotation and flush.
 - `client/learning/CombatTelemetry`: the only native observation adapter. It converts actual entities, controls, aim rays and ping into recorder events.
 - `ml/optimus_training/`: offline preparation and candidate fitting. These tools never install a candidate or alter the running client.
 
@@ -39,6 +39,8 @@ Use `/o logging on` during ordinary FFA combat. Data is written under the game d
 Independent life boundaries record actual deaths, respawn transitions and same-world returns from the configured FFA pit. The server kill feed is matched against the client's actual username and recent opponent names in memory, then stored anonymously. A death observed through multiple mechanisms is correlated rather than counted repeatedly. Changing target or losing an opponent does not hide a life-ending death.
 
 Remote health or hurt following an attack does not establish that this bot caused the damage in a crowd. Prepared attack reviews retain unknown attribution. Missing damage is not treated as a confirmed miss. The observer never controls or overrides server state.
+
+Normal client shutdown flushes queued observations and seals the current life/session.
 
 ## Offline preparation and training
 
@@ -60,4 +62,6 @@ The method is outcome-weighted behaviour cloning, not counterfactual reinforceme
 
 ## Restored checkpoint
 
-The bundled `assets/optimus/ml/movement.dgml` restores the numeric parameters from the previous local DuelGuard ML installation. Its SHA-256 is `7dfe625854d1d90c07f78ae35fa3ff59074dc54271f049261b62cb2af066dec4`. The original file had SHA-256 `a913c02bf3cbc63e63e6b4d5381f7075acd32b8eafb7429fd1529a1b2902c0a4`; only CRLF/terminal-newline normalization changes the file bytes. DGML format identifiers and the `DGML16-v1` feature contract are retained for compatibility. It is a restored baseline, not newly trained or verified as an improvement on live Hypixel.
+The bundled `assets/optimus/ml/movement.dgml` restores the numeric parameters from the previous local ML installation. Its SHA-256 is `7dfe625854d1d90c07f78ae35fa3ff59074dc54271f049261b62cb2af066dec4`. The original file had SHA-256 `a913c02bf3cbc63e63e6b4d5381f7075acd32b8eafb7429fd1529a1b2902c0a4`; only CRLF/terminal-newline normalization changes the file bytes. DGML format identifiers and the `DGML16-v1` feature contract are retained for compatibility. It is a restored baseline, not newly trained or verified as an improvement on live Hypixel.
+
+Guard uses its own rule-based follow and assist policy through the shared movement and combat adapters. Recording remains available in guard mode, including aim/timing decisions and life outcomes, but guard decisions do not become ordinary-combat movement training examples.

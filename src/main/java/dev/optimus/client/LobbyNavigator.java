@@ -545,6 +545,14 @@ final class LobbyNavigator {
         }
     }
 
+    CollisionGeometry collisionSnapshot() {
+        return geometry.cached();
+    }
+
+    boolean travelJumpInProgress() {
+        return sprintLeap != null;
+    }
+
     boolean jumpInProgress() {
         return advanced.inFlight()
                 || gapCommitted

@@ -5,6 +5,7 @@ import com.google.gson.JsonParser;
 import dev.optimus.core.ml.MovementAdvisor;
 import dev.optimus.core.ml.MovementModel;
 import dev.optimus.core.navigation.NearbySteering;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -137,24 +138,30 @@ public final class LearningSelfTest {
         } finally {
             session.close();
         }
-        Path legacy = Files.createTempDirectory("optimus-legacy-ml-");
+        Path saved = Files.createTempDirectory("optimus-saved-ml-");
         Files.write(
-                legacy.resolve("duelguard-ml.properties"),
-                "mode=live\nrecord=true".getBytes(StandardCharsets.UTF_8));
-        LearningConfiguration migrated = LearningConfiguration.load(legacy.toFile());
+                saved.resolve("optimus-ml.properties"),
+                "\ufeffmode=live\nrecord=true\ncustom.value=keep".getBytes(StandardCharsets.UTF_8));
+        LearningConfiguration loaded = LearningConfiguration.load(saved.toFile());
         expect(
-                migrated.mode == LearningConfiguration.Mode.LIVE && migrated.recording,
-                "existing local ML preferences remain readable");
-        migrated.save("mode", "shadow");
+                loaded.mode == LearningConfiguration.Mode.LIVE && loaded.recording,
+                "saved mode and recording are read with a UTF-8 BOM");
+        loaded.save("mode", "shadow");
         expect(
-                Files.isRegularFile(legacy.resolve("optimus-ml.properties")),
-                "updates use the Optimus settings namespace");
-        expect(
-                new String(
-                                Files.readAllBytes(legacy.resolve("duelguard-ml.properties")),
-                                StandardCharsets.UTF_8)
-                        .contains("mode=live"),
-                "migration never overwrites the legacy file");
+                dev.optimus.core.config.PropertiesStore.read(
+                                saved.resolve("optimus-ml.properties").toFile())
+                        .getProperty("custom.value")
+                        .equals("keep"),
+                "mode changes preserve unrelated settings");
+        Files.delete(saved.resolve("optimus-ml.properties"));
+        Files.createDirectory(saved.resolve("optimus-ml.properties"));
+        boolean invalidPath = false;
+        try {
+            LearningConfiguration.load(saved.toFile());
+        } catch (IOException expected) {
+            invalidPath = true;
+        }
+        expect(invalidPath, "an invalid current settings path is rejected");
         for (String command : new String[] {"ml live", "logging on", "record off"}) {
             String body = "!o " + command;
             expect(

@@ -5,6 +5,8 @@ A Forge 1.8.9 combat and navigation client, with an offline map editor and a Win
 Put the JAR in `mods/`, restart Minecraft, then run `/o help`. Chat commands use `!o`. F8 starts; F9 stops.
 
 - [Running the bot and commands](docs/BOT.md)
+- [Guard mode](docs/GUARD.md)
+- [Settings](docs/CONFIGURATION.md)
 - [Combat profiles](docs/COMBAT.md)
 - [Optional movement ML and training](docs/ML.md)
 - [Navigation and route editing](docs/NAVIGATION.md)

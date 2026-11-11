@@ -10,7 +10,7 @@ import java.util.Locale;
 import java.util.function.Predicate;
 
 /** Composition and lifecycle for optional learning. Never starts or stops gameplay. */
-public final class LearningSession implements MovementAdvisor {
+public final class LearningSession implements MovementAdvisor, AutoCloseable {
     private final File directory;
     private final String version;
     private final FightRecorder recorder;
@@ -59,9 +59,15 @@ public final class LearningSession implements MovementAdvisor {
             recorder.start(configuration.mode.name().toLowerCase(Locale.ROOT), version);
     }
 
+    @Override
     public void close() {
         running = false;
         recorder.close();
+    }
+
+    /** JVM shutdown closes only local recording resources; it never reads Minecraft state. */
+    public void shutdown() {
+        recorder.shutdown();
     }
 
     public String status() {

@@ -50,11 +50,11 @@ public final class ParkourSelfTest {
         legacy.setProperty("hypixel.b",new Vec3Point(12,76,-80).serialize());
         try(java.io.FileOutputStream out=new java.io.FileOutputStream(new java.io.File(legacyDirectory,"optimus.properties"))) { legacy.store(out,"Legacy settings"); }
         ClientSettings defaultUpgrade=new ClientSettings(legacyDirectory);
-        expect(defaultUpgrade.parkourEnabled,"legacy saved false adopts the requested default once");
+        expect(!defaultUpgrade.parkourEnabled,"saved parkour off is respected without rewriting the config");
         expect(defaultUpgrade.combatProfile==CombatProfile.PACED && defaultUpgrade.combatSeed==73
             && defaultUpgrade.whitelist.contains("FixtureUser") && defaultUpgrade.hypixelPit.cornerA().x==-12,
             "default migration preserves unrelated profile, seed, targets and custom geometry");
-        expect(new ClientSettings(legacyDirectory).parkourEnabled,"enabled default migration persists on restart");
+        expect(!new ClientSettings(legacyDirectory).parkourEnabled,"saved parkour off survives restart");
         defaultUpgrade.parkourEnabled=false;defaultUpgrade.save();
         expect(!new ClientSettings(legacyDirectory).parkourEnabled,"a subsequent optional off override survives restart");
         defaultUpgrade.parkourEnabled=true;defaultUpgrade.save();
@@ -92,11 +92,11 @@ public final class ParkourSelfTest {
         loaded.whitelist.add("FixtureUser"); loaded.combatSeed=42; loaded.combatProfile=CombatProfile.PACED;
         loaded.hypixelPit.setCornerA(new Vec3Point(-24,62.5,-126)); loaded.hypixelPit.setCornerB(new Vec3Point(24,78,-78)); loaded.save();
         ClientSettings upgraded=new ClientSettings(loaded.traceDirectory().getParentFile());
-        expect(ArenaPreset.same(upgraded.hypixelPit.cornerA(),ArenaPreset.PIT_A) && ArenaPreset.same(upgraded.hypixelPit.cornerB(),ArenaPreset.PIT_B),"old supplied preset upgrades on load");
+        expect(upgraded.hypixelPit.cornerA().x==-24 && upgraded.hypixelPit.cornerB().x==24,"loading preserves explicitly saved bounds");
         expect(upgraded.navigationConfigured() && upgraded.controllerName.equals("FixtureUser") && upgraded.whitelist.contains("FixtureUser")
             && upgraded.combatSeed==42 && upgraded.combatProfile==CombatProfile.PACED && upgraded.pitInstance.equals("dynamiclobbyX"),"upgrade preserves controller, targets, settings and instance binding");
-        expect(ArenaPreset.same(new ClientSettings(upgraded.traceDirectory().getParentFile()).hypixelPit.cornerA(),ArenaPreset.PIT_A),"expanded preset migration persists");
-        expect(!ArenaPreset.upgradeLegacyPit(upgraded.hypixelPit),"expanded preset is not repeatedly enlarged");
+        expect(new ClientSettings(upgraded.traceDirectory().getParentFile()).hypixelPit.cornerA().x==-24,"saved custom bounds persist unchanged");
+
         upgraded.hypixelPit.setCornerA(new Vec3Point(-23,62.5,-126)); upgraded.save();
         expect(new ClientSettings(upgraded.traceDirectory().getParentFile()).hypixelPit.cornerA().x==-23,"custom pit remains as explicitly configured");
 

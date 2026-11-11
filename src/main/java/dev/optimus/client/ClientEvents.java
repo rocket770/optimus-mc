@@ -3,6 +3,7 @@ package dev.optimus.client;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import dev.optimus.client.guard.GuardController;
 import dev.optimus.client.learning.CombatTelemetry;
 import dev.optimus.core.combat.KillFeed;
 import dev.optimus.core.control.ChatMessage;
@@ -69,6 +70,10 @@ public final class ClientEvents {
     private final NavigationController navigation;
     private final LearningSession learning;
     private final CombatTelemetry telemetry;
+    private final GuardController guard;
+    private final GuardBridge guardHost;
+    private int locationRoundTrip;
+    private long locationSentAt;
     private final KillFeed killFeed = new KillFeed();
 
     ClientEvents() {
@@ -78,10 +83,87 @@ public final class ClientEvents {
         telemetry = new CombatTelemetry(mc, learning.recording());
         combat = new CombatController(mc, navigator, input, this, learning, telemetry);
         navigation = new NavigationController(mc, navigator, input, this);
+        GuardNavigationAdapter guardQueries = new GuardNavigationAdapter(mc, navigator);
+        guardHost = new GuardBridge(mc, this, input, combat, navigator, guardQueries, telemetry);
+        guard =
+                new GuardController(
+                        guardHost, mc, guardQueries, combat.clicks(), () -> OptimusMod.settings);
+    }
+
+    String guardCommand(String[] args) {
+        if (args.length == 1 || args.length == 2 && args[1].equalsIgnoreCase("status"))
+            return guard.status();
+        if (args.length == 2) return guard.configure(args[1]);
+        if (args.length == 3 && args[1].equalsIgnoreCase("keys"))
+            return guard.keys(args[2].toLowerCase(java.util.Locale.ROOT));
+        if (args.length == 3
+                && args[1].equalsIgnoreCase("share")
+                && (args[2].equalsIgnoreCase("on") || args[2].equalsIgnoreCase("off")))
+            return guard.share(args[2].equalsIgnoreCase("on"));
+        return "Usage: /o guard <player>|off|status | keys auto|on|off|bind | share on|off";
+    }
+
+    String guardSummary() {
+        return guard.summary();
+    }
+
+    void startGuardIfNeeded() {
+        if (!armed || run.phase() == RunSafety.Phase.OFF) requestStart(false);
+    }
+
+    boolean protectsGuardedPlayer(EntityPlayer player) {
+        return guard.protects(player);
+    }
+
+    String guardLobby() {
+        return lobbySafety.lobby();
+    }
+
+    String guardInstance() {
+        return lobbySafety.instance();
+    }
+
+    int guardPingMillis() {
+        NetworkPlayerInfo info =
+                mc.thePlayer == null || mc.getNetHandler() == null
+                        ? null
+                        : mc.getNetHandler().getPlayerInfo(mc.thePlayer.getUniqueID());
+        return Math.max(locationRoundTrip, info == null ? 0 : info.getResponseTime());
+    }
+
+    void controlOptionsChanged() {
+        guard.reset();
+        input.clearCombatInput();
+        releaseKeys();
+        navigator.reset();
+        navigation.resetSteering();
+        combat.reconfigure(OptimusMod.settings.combatSeed, tickNo);
+        telemetry.reset();
+        learning.recording().end(tickNo, "settings_changed");
+        roamGoal = null;
+        nextRoamAt = roamUntil = 0;
+    }
+
+    @SubscribeEvent
+    public void onGuardedAttack(net.minecraftforge.event.entity.player.AttackEntityEvent event) {
+        guard.attack(event);
+    }
+
+    @SubscribeEvent
+    public void onGuardPlayerTick(TickEvent.PlayerTickEvent event) {
+        if (event.phase == TickEvent.Phase.START
+                && event.player == mc.thePlayer
+                && enteredPit
+                && guard.enabled()
+                && controlAllowed()) guard.step(OptimusMod.settings.hypixelPit, tickNo, true);
     }
 
     String mlCommand(String value) {
         return learning.mlCommand(value);
+    }
+
+    void closeRecording() {
+        learning.shutdown();
     }
 
     String loggingCommand(String value) {
@@ -196,7 +278,10 @@ public final class ClientEvents {
                 && target.isEntityAlive()
                 && target.worldObj == mc.theWorld
                 && pit.containsBody(position(target), 0.3, 1.8)
-                && OptimusMod.settings.targets(target.getName());
+                && !guard.protects(target)
+                && (guard.enabled()
+                        ? guard.permits(target, guard.tick())
+                        : OptimusMod.settings.targets(target.getName()));
     }
 
     private Vec3Point position(EntityPlayer entity) {
@@ -295,7 +380,8 @@ public final class ClientEvents {
         navigationOverlay.clear();
         run.stop();
         releaseKeys();
-        // Disable control and release keys before any bounded recorder drain.
+        // Disable control and release keys before closing input/recording transports.
+        guard.reset();
         learning.close();
         telemetry.reset();
         killFeed.reset();
@@ -445,6 +531,8 @@ public final class ClientEvents {
 
     void printStatus() {
         OptimusMod.notice(learning.status());
+        OptimusMod.notice(guard.summary());
+        OptimusMod.notice(OptimusMod.settings.configStatus());
         ClientSettings s = OptimusMod.settings;
         OptimusMod.notice(
                 "Bot: "
@@ -580,10 +668,10 @@ public final class ClientEvents {
     }
 
     void setParkour(boolean enabled) {
-        stop("Parkour setting changed");
         OptimusMod.settings.parkourEnabled = enabled;
         OptimusMod.settings.save();
-        OptimusMod.notice("Parkour " + (enabled ? "on" : "off") + ". /o start to resume.");
+        controlOptionsChanged();
+        OptimusMod.notice("Parkour " + (enabled ? "on" : "off") + ".");
     }
 
     void clearController() {
@@ -647,7 +735,7 @@ public final class ClientEvents {
             return "That player is already the main controller.";
         settings.operators.put(name, uuid);
         settings.save();
-        return "Operator added: " + name + " (targets and start/stop only).";
+        return "Operator added: " + name + ".";
     }
 
     void weaponChanged() {
@@ -754,9 +842,11 @@ public final class ClientEvents {
                 remoteReply(
                         runLabel()
                                 + " | "
-                                + (settings.targetAll
-                                        ? "all pit players"
-                                        : settings.whitelist.all().size() + " targets")
+                                + (guard.enabled()
+                                        ? "guarding " + settings.guardName
+                                        : settings.targetAll
+                                                ? "all pit players"
+                                                : settings.whitelist.all().size() + " targets")
                                 + " | "
                                 + (settings.swordEnabled ? "sword" : "fist")
                                 + " | "
@@ -767,13 +857,10 @@ public final class ClientEvents {
                 remoteReply("Targets: " + settings.targetSummary());
             } else if (args[0].equals("help")) {
                 remoteReply(
-                        "!o start|stop|status | target add/remove/list/clear/all/listed | weapon sword/fist | operator");
+                        "!o start|stop|status | guard <player>/off | target | weapon sword/fist");
             } else if (!replies.isEmpty()) remoteReply(replies.get(replies.size() - 1));
             else if (args[0].equals("parkour"))
-                remoteReply(
-                        "Parkour "
-                                + (settings.parkourEnabled ? "on" : "off")
-                                + ". Use !o start to resume.");
+                remoteReply("Parkour " + (settings.parkourEnabled ? "on" : "off") + ".");
             else remoteReply("Done.");
             return true;
         } catch (IllegalArgumentException error) {
@@ -785,7 +872,8 @@ public final class ClientEvents {
     }
 
     void requestLocraw() {
-        stop("Manual location verification");
+        releaseKeys();
+        navigator.reset();
         lobbySafety.invalidate();
         announceVerification = true;
         sendLocationRequest();
@@ -799,6 +887,7 @@ public final class ClientEvents {
                 || !ServerSafety.isHypixel(connectedServer())) return;
         releaseKeys();
         lobbySafety.request(connectedServer(), mc.theWorld, now());
+        locationSentAt = now();
         mc.thePlayer.sendChatMessage("/locraw");
     }
 
@@ -853,6 +942,8 @@ public final class ClientEvents {
                                     stringField(json, "lobbyname"),
                                     stringField(json, "server"),
                                     json.has("mode") || json.has("map"));
+            if (accepted && locationSentAt > 0)
+                locationRoundTrip = (int) Math.max(0, Math.min(6000, now() - locationSentAt));
             if (!accepted) {
                 lobbySafety.invalidate();
                 if (armed
@@ -936,6 +1027,7 @@ public final class ClientEvents {
 
     @SubscribeEvent
     public void onTick(TickEvent.ClientTickEvent event) {
+        guard.publish();
         if (event.phase == TickEvent.Phase.START) {
             ensureTransitionWatch();
             int stopCode = OptimusMod.stopKey.getKeyCode();
@@ -1095,6 +1187,7 @@ public final class ClientEvents {
         }
         if (event.phase == TickEvent.Phase.START) refreshLocation();
         if (mc.currentScreen != null) {
+            if (guard.enabled()) guard.suspend();
             releaseKeys();
             if (!guiPaused) {
                 guiPaused = true;
@@ -1112,6 +1205,8 @@ public final class ClientEvents {
             if (!armed) return;
         }
         if (event.phase != TickEvent.Phase.END) {
+            if (enteredPit && guard.enabled() && controlAllowed())
+                guard.step(OptimusMod.settings.hypixelPit, tickNo, true);
             input.reassert();
             return;
         }
@@ -1131,14 +1226,16 @@ public final class ClientEvents {
         if (enteredPit) {
             if (controlAllowed()) {
                 learning.recording().beginLife(tickNo);
-                combat.fight(OptimusMod.settings.hypixelPit, position(mc.thePlayer));
-                telemetry.end(
-                        tickNo,
-                        input.snapshot(),
-                        armed && controlAllowed(),
-                        navigator.jumpInProgress()
-                                ? "jump"
-                                : mc.thePlayer.onGround ? "ground" : "air");
+                if (guard.enabled()) guard.step(OptimusMod.settings.hypixelPit, tickNo - 1);
+                else combat.fight(OptimusMod.settings.hypixelPit, position(mc.thePlayer));
+                if (!guard.enabled())
+                    telemetry.end(
+                            tickNo,
+                            input.snapshot(),
+                            armed && controlAllowed(),
+                            navigator.jumpInProgress()
+                                    ? "jump"
+                                    : mc.thePlayer.onGround ? "ground" : "air");
             } else stop(navigationFailure(OptimusMod.settings.hypixelPit));
             return;
         }

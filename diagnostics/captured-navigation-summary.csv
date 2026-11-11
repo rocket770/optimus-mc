@@ -10,7 +10,7 @@ south_slab_parallel,-0.5,70.5,-95.5,1.5,71.5,-95.5,ARRIVED,16,1,0,0,2
 west_slab_walk,-23.5,66.5,-109.5,-23.5,66.5,-108.5,ARRIVED,5,0,0,0,1
 west_slab_long_walk,-23.5,66.5,-109.5,-23.5,66.5,-107.5,ARRIVED,9,0,4,0,1
 quartz_stair_chain,-15.5,63.0,-116.5,-13.5,65.0,-115.5,ARRIVED,22,1,0,0,3
-floor_to_quartz_stairs,0.5,63.0,-100.5,-13.5,65.0,-115.5,ARRIVED,185,1,101,2,56
+floor_to_quartz_stairs,0.5,63.0,-100.5,-13.5,65.0,-115.5,ARRIVED,174,1,101,2,45
 wool_facing_east,1.5,68.0,-112.5,0.5,69.0,-110.5,ARRIVED,36,1,13,0,13
 wool_facing_south,1.5,68.0,-112.5,0.5,69.0,-110.5,ARRIVED,41,1,13,0,18
 wool_facing_west,1.5,68.0,-112.5,0.5,69.0,-110.5,ARRIVED,37,1,13,0,14

@@ -117,38 +117,15 @@ public final class CombatTelemetry {
             boolean canAttack,
             CombatClicks.Action action) {
         if (!recorder.active() || opponent == null) return;
-        Vec3Point eye = eye(mc.thePlayer);
-        CollisionGeometry.Box body = body(opponent);
-        Vec3Point hit =
-                CombatAim.hit(
-                        eye,
-                        body,
-                        mc.thePlayer.rotationYaw,
-                        mc.thePlayer.rotationPitch,
-                        CombatClicks.ATTACK_REACH);
         boolean requested = lastAttack == tick && action == CombatClicks.Action.ATTACK;
-        JsonObject row = new JsonObject();
-        row.addProperty("combat_contract", "aim-timing-v1");
+        JsonObject row =
+                decisionState(
+                        opponent,
+                        desiredYaw,
+                        desiredPitch,
+                        mc.thePlayer.rotationYaw - yawStep,
+                        mc.thePlayer.rotationPitch - pitchStep);
         row.addProperty("combat_mode", "normal");
-        row.add("self", snapshot(mc.thePlayer));
-        row.add("opponent", snapshot(opponent));
-        row.addProperty("desired_yaw", desiredYaw);
-        row.addProperty("desired_pitch", desiredPitch);
-        row.addProperty("view_yaw_before", mc.thePlayer.rotationYaw - yawStep);
-        row.addProperty("view_pitch_before", mc.thePlayer.rotationPitch - pitchStep);
-        row.addProperty(
-                "yaw_error_before",
-                MathHelper.wrapAngleTo180_float(desiredYaw - mc.thePlayer.rotationYaw + yawStep));
-        row.addProperty(
-                "pitch_error_before", desiredPitch - mc.thePlayer.rotationPitch + pitchStep);
-        row.addProperty(
-                "yaw_error_after",
-                MathHelper.wrapAngleTo180_float(desiredYaw - mc.thePlayer.rotationYaw));
-        row.addProperty("pitch_error_after", desiredPitch - mc.thePlayer.rotationPitch);
-        row.addProperty("reach", CombatClicks.ATTACK_REACH);
-        row.addProperty("body_distance", Math.sqrt(CombatAim.distanceSquared(eye, body)));
-        row.addProperty("ray_intersects_body", hit != null);
-        row.addProperty("clear_body_ray", hit != null && clear(eye, hit));
         row.addProperty("equipment_ready", equipment);
         row.addProperty("pacing_ready", ready);
         row.addProperty("action", action.name().toLowerCase(java.util.Locale.ROOT));
@@ -170,14 +147,93 @@ public final class CombatTelemetry {
                                                                 : !canAttack
                                                                         ? "policy"
                                                                         : "duplicate_tick");
-        row.addProperty("ping_ms", ping(mc.thePlayer));
-        int otherPing = ping(opponent);
-        if (otherPing > 0) row.addProperty("opponent_ping_ms_observed", otherPing);
+        attackInterval(row, tick, requested);
+        recorder.combatDecision(tick, opponent, opponent.getName(), row);
+    }
+
+    public void guardDecision(
+            long tick,
+            EntityPlayer opponent,
+            long controlTick,
+            float beforeYaw,
+            float beforePitch,
+            float desiredYaw,
+            float desiredPitch,
+            boolean equipment,
+            boolean hitWindow,
+            boolean pending,
+            long cooldown,
+            CombatClicks.Action action,
+            boolean requested,
+            String gate) {
+        if (!recorder.active()
+                || opponent == null && (action != CombatClicks.Action.AIR_SWING || requested))
+            return;
+        JsonObject row;
+        if (opponent == null) {
+            row = new JsonObject();
+            row.addProperty("combat_contract", "aim-timing-v1");
+            row.add("self", snapshot(mc.thePlayer));
+            row.addProperty("ping_ms", ping(mc.thePlayer));
+        } else row = decisionState(opponent, desiredYaw, desiredPitch, beforeYaw, beforePitch);
+        row.addProperty("combat_mode", "guard");
+        row.addProperty("control_tick", controlTick);
+        row.addProperty("equipment_ready", equipment);
+        row.addProperty("hit_window_ready", hitWindow);
+        row.addProperty("assist_pending", pending);
+        row.addProperty("cooldown_ticks", cooldown);
+        row.addProperty("action", action.name().toLowerCase(java.util.Locale.ROOT));
+        row.addProperty("attack_requested", requested);
+        row.addProperty("gate", opponent == null ? "target_unresolved" : gate);
+        attackInterval(row, tick, requested);
+        recorder.combatDecision(tick, opponent, opponent == null ? "" : opponent.getName(), row);
+    }
+
+    private void attackInterval(JsonObject row, long tick, boolean requested) {
         long previous = requested ? previousAttack : lastAttack;
         if (previous != Long.MIN_VALUE && tick >= previous)
             row.addProperty("ticks_since_previous_attack", tick - previous);
+    }
+
+    private JsonObject decisionState(
+            EntityPlayer opponent,
+            float desiredYaw,
+            float desiredPitch,
+            float beforeYaw,
+            float beforePitch) {
+        Vec3Point eye = eye(mc.thePlayer);
+        CollisionGeometry.Box body = body(opponent);
+        Vec3Point hit =
+                CombatAim.hit(
+                        eye,
+                        body,
+                        mc.thePlayer.rotationYaw,
+                        mc.thePlayer.rotationPitch,
+                        CombatClicks.ATTACK_REACH);
+        JsonObject row = new JsonObject();
+        row.addProperty("combat_contract", "aim-timing-v1");
+        row.add("self", snapshot(mc.thePlayer));
+        row.add("opponent", snapshot(opponent));
+        row.addProperty("desired_yaw", desiredYaw);
+        row.addProperty("desired_pitch", desiredPitch);
+        row.addProperty("view_yaw_before", beforeYaw);
+        row.addProperty("view_pitch_before", beforePitch);
+        row.addProperty(
+                "yaw_error_before", MathHelper.wrapAngleTo180_float(desiredYaw - beforeYaw));
+        row.addProperty("pitch_error_before", desiredPitch - beforePitch);
+        row.addProperty(
+                "yaw_error_after",
+                MathHelper.wrapAngleTo180_float(desiredYaw - mc.thePlayer.rotationYaw));
+        row.addProperty("pitch_error_after", desiredPitch - mc.thePlayer.rotationPitch);
+        row.addProperty("reach", CombatClicks.ATTACK_REACH);
+        row.addProperty("body_distance", Math.sqrt(CombatAim.distanceSquared(eye, body)));
+        row.addProperty("ray_intersects_body", hit != null);
+        row.addProperty("clear_body_ray", hit != null && clear(eye, hit));
+        row.addProperty("ping_ms", ping(mc.thePlayer));
+        int otherPing = ping(opponent);
+        if (otherPing > 0) row.addProperty("opponent_ping_ms_observed", otherPing);
         row.addProperty("nearby_other_players", nearby(opponent));
-        recorder.combatDecision(tick, opponent, opponent.getName(), row);
+        return row;
     }
 
     public void death(long tick, String reason) {
