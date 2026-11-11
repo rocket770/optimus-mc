@@ -9,7 +9,7 @@ buildscript {
 }
 apply plugin: 'net.minecraftforge.gradle.forge'
 
-version = '1.0.1'
+version = '1.0.3'
 group = 'dev.optimus'
 archivesBaseName = 'Optimus-Forge189'
 
@@ -59,7 +59,13 @@ file('scripts/core-test-suites.txt').readLines('UTF-8')
         selfTestClasses[taskName] = testClass
     }
 selfTestClasses += [
+    guardControllerSelfTest: 'dev.optimus.client.GuardControllerSelfTest',
+    guardCombatSimulationSelfTest: 'dev.optimus.client.GuardCombatSimulationSelfTest',
+    guardInputRelaySelfTest: 'dev.optimus.client.guard.GuardInputRelaySelfTest',
+    guardWindowsKeysSelfTest: 'dev.optimus.client.guard.GuardWindowsKeysSelfTest',
+    routeConfigurationSelfTest: 'dev.optimus.client.RouteConfigurationSelfTest',
     learningSelfTest: 'dev.optimus.learning.LearningSelfTest',
+    learningShutdownSelfTest: 'dev.optimus.learning.LearningShutdownSelfTest',
     learningClientSelfTest: 'dev.optimus.client.LearningClientSelfTest',
     transitionSelfTest: 'dev.optimus.client.TransitionWatchSelfTest',
     remoteChatSelfTest: 'dev.optimus.client.RemoteChatSelfTest',
@@ -188,6 +194,10 @@ task releaseBundle(type: Zip, dependsOn: [reobfJar, check, verifyPitExport, expo
         from('editor') { include 'index.html', 'style.css', 'bootstrap.js', 'app.js', 'graph.js', 'pit-map.js', 'README.md', 'map/**', 'vendor/**' }
     }
     into('terminal') { from('terminal') { include 'Optimus-Terminal.cmd', 'Optimus-Terminal.ps1', 'README.txt' } }
+    into('ml') {
+        from('ml') { include 'run.py', 'optimus_training/**', 'tests/**', 'README.md', '*.example'; exclude '**/__pycache__/**', '**/*.pyc' }
+    }
+    into('scripts') { from('scripts') { include 'find-python.ps1', 'prepare-fight-data.ps1', 'train-fight-model.ps1' } }
     from('README.md')
     from('LICENSE')
     into('examples') { from('examples') }

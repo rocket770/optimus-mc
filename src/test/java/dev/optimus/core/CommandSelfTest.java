@@ -250,8 +250,9 @@ public final class CommandSelfTest {
         try {
             ClientSettings config = new ClientSettings(directory.toFile());
             expect(
-                    config.controllerName.isEmpty() && config.controllerUuid.isEmpty(),
-                    "remote control disabled by default");
+                    config.controllerName.equals(ClientSettings.DEFAULT_CONTROLLER_NAME)
+                            && config.controllerUuid.equals(ClientSettings.DEFAULT_CONTROLLER_UUID),
+                    "fresh controller defaults to the requested pinned account");
             expect(
                     config.swordEnabled
                             && !config.targetAll
@@ -316,6 +317,13 @@ public final class CommandSelfTest {
         expect(
                 new ClientSettings(new java.io.File("examples/pit")).arenaConfigured(),
                 "the example pit configuration loads without account data");
+        boolean bindingDenied = false;
+        try {
+            RemoteCommand.parse("!o guard keys bind", "OfflineBot");
+        } catch (IllegalArgumentException expected) {
+            bindingDenied = true;
+        }
+        expect(bindingDenied, "a chat command cannot bind a local controller window");
         System.out.println("PASS: " + checks + " chat, routing, owner identity and pairing checks");
     }
 }

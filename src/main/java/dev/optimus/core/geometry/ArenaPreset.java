@@ -17,13 +17,4 @@ public final class ArenaPreset {
     public static boolean same(Vec3Point a, Vec3Point b) {
         return a != null && b != null && a.x == b.x && a.y == b.y && a.z == b.z;
     }
-
-    public static boolean upgradeLegacyPit(PitRegion pit) {
-        if (pit == null
-                || !same(pit.cornerA(), new Vec3Point(-24, 62.5, -126))
-                || !same(pit.cornerB(), new Vec3Point(24, 78, -78))) return false;
-        pit.setCornerA(PIT_A);
-        pit.setCornerB(PIT_B);
-        return true;
-    }
 }

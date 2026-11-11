@@ -19,3 +19,4 @@ dev.optimus.core.NavigationViewSelfTest
 dev.optimus.core.ml.DgmlMovementModelSelfTest
 dev.optimus.core.ml.HybridMovementPolicySelfTest
 dev.optimus.core.KillFeedSelfTest
+dev.optimus.core.SettingsPersistenceSelfTest

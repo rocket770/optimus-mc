@@ -89,10 +89,56 @@ public final class SprintJump {
             double airAcceleration,
             double friction,
             boolean chasing) {
+        return plan(
+                geometry,
+                area,
+                from,
+                goal,
+                speed,
+                groundAcceleration,
+                airAcceleration,
+                friction,
+                chasing ? 7 : 6,
+                chasing ? 3.25 : 1.5);
+    }
+
+    public static Plan guardPlan(
+            CollisionGeometry geometry,
+            PitRegion area,
+            Vec3Point from,
+            Vec3Point goal,
+            double speed,
+            double groundAcceleration,
+            double airAcceleration,
+            double friction) {
+        return plan(
+                geometry,
+                area,
+                from,
+                goal,
+                speed,
+                groundAcceleration,
+                airAcceleration,
+                friction,
+                4.5,
+                .8);
+    }
+
+    private static Plan plan(
+            CollisionGeometry geometry,
+            PitRegion area,
+            Vec3Point from,
+            Vec3Point goal,
+            double speed,
+            double groundAcceleration,
+            double airAcceleration,
+            double friction,
+            double minimum,
+            double margin) {
         double distance = Math.sqrt(from.horizontalDistanceSq(goal));
         // motionX/Z are already multiplied by ground friction: ordinary sprint
         // settles around .153, even though displacement is about .281 per tick.
-        if (distance < (chasing ? 7 : 6)
+        if (distance < minimum
                 || speed < .12
                 || speed > .55
                 || !area.containsBody(goal, .3, 1.8)
@@ -143,8 +189,7 @@ public final class SprintJump {
                                 Math.sqrt(
                                         from.horizontalDistanceSq(points.get(points.size() - 1))));
             }
-        if (max + (chasing ? 3.25 : 1.5) > distance)
-            return null; // land before close combat or a travel endpoint
+        if (max + margin > distance) return null; // land before close combat or a travel endpoint
         return new Plan(from, goal, dx, dz, max);
     }
 

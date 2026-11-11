@@ -16,6 +16,10 @@ public final class CombatClicks {
         lastAction = Long.MIN_VALUE;
     }
 
+    public long remaining(long tick) {
+        return Math.max(0, nextAttack - tick);
+    }
+
     public boolean ready(long tick) {
         return tick >= nextAttack;
     }

@@ -93,7 +93,25 @@ final class CombatController {
         combatHop.reset();
     }
 
+    CombatClicks clicks() {
+        return combatClicks;
+    }
+
+    boolean equipmentReady(boolean sword, long tick) {
+        return combatEquipment.ready(mc.thePlayer, tick, sword);
+    }
+
+    int attackDelay() {
+        return OptimusMod.settings.combatProfile.attackDelay(random);
+    }
+
     void begin(long seed, long tick) {
+        reconfigure(seed, tick);
+        combatClicks.defer(tick, 6);
+    }
+
+    void reconfigure(long seed, long tick) {
+        release();
         random.setSeed(seed);
         combatTap.seed(seed ^ 0x57415441504cL);
         comboEscape.seed(seed ^ 0x434f4d424fL);
@@ -101,7 +119,6 @@ final class CombatController {
         combatTurn.seed(seed ^ 0x5455524eL);
         nextStrafeChange = tick;
         strafeSign = 1;
-        combatClicks.defer(tick, 6);
     }
 
     void resetFocus() {
@@ -1035,10 +1052,18 @@ final class CombatController {
     }
 
     private void requestAttack(EntityPlayer target, CombatProfile profile) {
+        sendAttack(target, profile, OptimusMod.settings.swordEnabled, session.tick());
+    }
+
+    boolean assistAttack(EntityPlayer target, boolean sword, long tick) {
+        return sendAttack(target, OptimusMod.settings.combatProfile, sword, tick);
+    }
+
+    private boolean sendAttack(
+            EntityPlayer target, CombatProfile profile, boolean sword, long tick) {
         if (!session.controlAllowed()
                 || !session.targetAllowed(OptimusMod.settings.hypixelPit, target)
-                || !combatEquipment.ready(
-                        mc.thePlayer, session.tick(), OptimusMod.settings.swordEnabled)) return;
+                || !combatEquipment.ready(mc.thePlayer, tick, sword)) return false;
         // Vanilla can clear sprint inside attackEntity. Record the state that
         // actually requested the hit, before that normal client-side reset.
         boolean sprintAtRequest = mc.thePlayer.isSprinting();
@@ -1048,6 +1073,7 @@ final class CombatController {
         combatFocus.attacked(session.tick());
         comboEscape.attacked(session.tick());
         if (profile == CombatProfile.BALANCED) combatTap.attacked(session.tick(), sprintAtRequest);
+        return true;
     }
 
     private void strikeWhileMoving(

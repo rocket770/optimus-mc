@@ -1,6 +1,7 @@
 package dev.optimus.client;
 
 import dev.optimus.core.combat.CombatProfile;
+import dev.optimus.core.config.PropertiesStore;
 import dev.optimus.core.control.RemoteCommand;
 import dev.optimus.core.control.TargetWhitelist;
 import dev.optimus.core.geometry.ArenaPreset;
@@ -8,13 +9,7 @@ import dev.optimus.core.geometry.PitRegion;
 import dev.optimus.core.geometry.Vec3Point;
 import dev.optimus.core.navigation.RouteFollower;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.file.AtomicMoveNotSupportedException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Map;
 import java.util.Properties;
 import java.util.TreeMap;
@@ -29,11 +24,16 @@ public final class ClientSettings {
     public Vec3Point spawnPoint, dropRim;
     public double dropFloor = 63;
     public boolean parkourEnabled = true;
-    public String controllerName = "", controllerUuid = "";
+    public static final String DEFAULT_CONTROLLER_NAME = "rocket770";
+    public static final String DEFAULT_CONTROLLER_UUID = "fd299507-9e07-433f-a908-52dea48a821e";
+    public String controllerName = DEFAULT_CONTROLLER_NAME,
+            controllerUuid = DEFAULT_CONTROLLER_UUID;
+    public String guardName = "", guardUuid = "", guardKeys = "auto";
+    public boolean routeHintsEnabled = true;
     public final Map<String, String> operators = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
     public boolean swordEnabled = true, targetAll = false;
     public boolean debugVisuals = false;
-    // Preserve legacy data for migration; none of these fields authorize bot input.
+    // Stored training data does not authorize bot input.
     public final PitRegion trainingPit = new PitRegion();
     public final RouteFollower trainingRoute = new RouteFollower();
     public String trainingServer = ""; // intentionally no default authorization
@@ -41,6 +41,8 @@ public final class ClientSettings {
     public long combatSeed = 1;
 
     private final File file;
+    private final Properties retained = new Properties();
+    private boolean loadFailed;
 
     public ClientSettings(File directory) {
         this.file = new File(directory, "optimus.properties");
@@ -48,29 +50,25 @@ public final class ClientSettings {
     }
 
     private void load(File source) {
-        Properties p = new Properties();
-        boolean upgraded = false;
-        if (!source.isFile()) return;
-        try (FileInputStream in = new FileInputStream(source)) {
-            p.load(in);
+        if (!source.exists()) return;
+        try {
+            Properties p = PropertiesStore.read(source);
+            retained.putAll(p);
             trainingServer = p.getProperty("training.server", "").trim();
             pitLobby = p.getProperty("hypixel.lobby", "");
             pitInstance = p.getProperty("hypixel.instance", "");
             loadControl(p);
+            loadGuard(p);
+            routeHintsEnabled =
+                    Boolean.parseBoolean(p.getProperty("navigation.routes.enabled", "true"));
             loadCombat(p);
-            upgraded = loadNavigation(p);
-            loadLegacyRoute(p);
-            if ("duelslobby1".equals(pitLobby)
-                    && ArenaPreset.same(spawnPoint, ArenaPreset.SPAWN)
-                    && ArenaPreset.same(dropRim, ArenaPreset.DROP_RIM)
-                    && ArenaPreset.same(navigationArea.cornerA(), ArenaPreset.NAV_A)
-                    && ArenaPreset.same(navigationArea.cornerB(), ArenaPreset.NAV_B)) {
-                upgraded = ArenaPreset.upgradeLegacyPit(hypixelPit) || upgraded;
-            }
+            loadNavigation(p);
+            loadTrainingRoute(p);
         } catch (IOException | IllegalArgumentException error) {
+            loadFailed = true;
+            controllerName = controllerUuid = "";
             System.err.println("[Optimus] Unable to load configuration: " + error);
         }
-        if (upgraded) save();
     }
 
     private static void loadPoint(Properties p, String key, PitRegion region, boolean first) {
@@ -92,12 +90,37 @@ public final class ClientSettings {
     }
 
     public void save() {
+        if (loadFailed) {
+            System.err.println(
+                    "[Optimus] Config was unreadable; leaving the original file untouched.");
+            return;
+        }
         Properties p = new Properties();
+        p.putAll(retained);
+        for (String key : new java.util.HashSet<>(p.stringPropertyNames()))
+            if (key.startsWith("control.operator.")) p.remove(key);
+        for (String key :
+                new String[] {
+                    "hypixel.a",
+                    "hypixel.b",
+                    "navigation.a",
+                    "navigation.b",
+                    "navigation.entrance",
+                    "navigation.spawn",
+                    "navigation.drop.rim",
+                    "training.a",
+                    "training.b"
+                }) p.remove(key);
         p.setProperty("training.server", trainingServer);
         p.setProperty("hypixel.lobby", pitLobby);
         p.setProperty("hypixel.instance", pitInstance);
         p.setProperty("control.owner.name", controllerName);
         p.setProperty("control.owner.uuid", controllerUuid);
+        p.setProperty("control.owner.defaults", "rocket770-v1");
+        p.setProperty("guard.name", guardName);
+        p.setProperty("guard.uuid", guardUuid);
+        p.setProperty("guard.keys", guardKeys);
+        p.setProperty("navigation.routes.enabled", Boolean.toString(routeHintsEnabled));
         for (Map.Entry<String, String> operator : operators.entrySet())
             p.setProperty("control.operator." + operator.getKey(), operator.getValue());
         p.setProperty("combat.weapon", swordEnabled ? "sword" : "fist");
@@ -127,32 +150,16 @@ public final class ClientSettings {
             return;
         }
         try {
-            store(p);
+            PropertiesStore.write(file, p);
+            retained.clear();
+            retained.putAll(p);
         } catch (IOException error) {
             System.err.println("[Optimus] Unable to save configuration: " + error);
         }
     }
 
-    private void store(Properties properties) throws IOException {
-        Path temporary = Files.createTempFile(file.getParentFile().toPath(), "optimus-", ".tmp");
-        try {
-            try (FileOutputStream out = new FileOutputStream(temporary.toFile())) {
-                properties.store(
-                        out,
-                        "Optimus Forge 1.8.9 - all verified Duels lobbies, full-lobby travel and pit-only combat");
-            }
-            try {
-                Files.move(
-                        temporary,
-                        file.toPath(),
-                        StandardCopyOption.ATOMIC_MOVE,
-                        StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException error) {
-                Files.move(temporary, file.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            }
-        } finally {
-            Files.deleteIfExists(temporary);
-        }
+    public String configStatus() {
+        return "Config: optimus.properties" + (loadFailed ? " (unreadable; unchanged)" : "");
     }
 
     public boolean targets(String name) {
@@ -247,9 +254,15 @@ public final class ClientSettings {
     }
 
     private void loadControl(Properties p) {
-        controllerName = p.getProperty("control.owner.name", "");
-        controllerUuid = p.getProperty("control.owner.uuid", "");
+        boolean defaultOwner =
+                !p.containsKey("control.owner.name") && !p.containsKey("control.owner.uuid");
+        controllerName =
+                p.getProperty("control.owner.name", defaultOwner ? DEFAULT_CONTROLLER_NAME : "");
+        controllerUuid =
+                p.getProperty("control.owner.uuid", defaultOwner ? DEFAULT_CONTROLLER_UUID : "");
         try {
+            if (!controllerName.matches("[A-Za-z0-9_]{3,16}"))
+                throw new IllegalArgumentException("Invalid controller");
             java.util.UUID.fromString(controllerUuid);
         } catch (IllegalArgumentException error) {
             controllerName = controllerUuid = "";
@@ -265,6 +278,18 @@ public final class ClientSettings {
                     }
                 }
             }
+    }
+
+    private void loadGuard(Properties p) {
+        String name = p.getProperty("guard.name", "");
+        String keys = p.getProperty("guard.keys", "auto").toLowerCase(java.util.Locale.ROOT);
+        if (keys.equals("auto") || keys.equals("on") || keys.equals("off")) guardKeys = keys;
+        if (!name.matches("[A-Za-z0-9_]{3,16}")) return;
+        try {
+            guardUuid = java.util.UUID.fromString(p.getProperty("guard.uuid", "")).toString();
+            guardName = name;
+        } catch (IllegalArgumentException ignored) {
+        }
     }
 
     private void loadCombat(Properties p) {
@@ -286,7 +311,7 @@ public final class ClientSettings {
         }
     }
 
-    private boolean loadNavigation(Properties p) {
+    private void loadNavigation(Properties p) {
         loadPoint(p, "hypixel.a", hypixelPit, true);
         loadPoint(p, "hypixel.b", hypixelPit, false);
         loadPoint(p, "navigation.a", navigationArea, true);
@@ -300,17 +325,10 @@ public final class ClientSettings {
             dropRim = null;
         }
         if (!Double.isFinite(dropFloor)) dropRim = null;
-        // Older releases wrote false as the default, indistinguishable from
-        // an override. Adopt the new default once; later explicit off persists.
-        boolean parkourDefaultsCurrent =
-                "enabled-v1".equals(p.getProperty("navigation.parkour.defaults", ""));
-        parkourEnabled =
-                !parkourDefaultsCurrent
-                        || Boolean.parseBoolean(p.getProperty("navigation.parkour", "true"));
-        return !parkourDefaultsCurrent;
+        parkourEnabled = Boolean.parseBoolean(p.getProperty("navigation.parkour", "true"));
     }
 
-    private void loadLegacyRoute(Properties p) {
+    private void loadTrainingRoute(Properties p) {
         loadPoint(p, "training.a", trainingPit, true);
         loadPoint(p, "training.b", trainingPit, false);
         for (String point : p.getProperty("training.route", "").split(";")) {

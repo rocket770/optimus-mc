@@ -15,7 +15,6 @@ final class ModelRepository {
         MovementModel primary = null, secondary = null;
         String problem = "";
         File custom = new File(directory, "optimus-ml-model.dgml");
-        if (!custom.exists()) custom = new File(directory, "duelguard-ml-model.txt");
         if (custom.exists()) {
             try {
                 primary = DgmlMovementModel.load(custom);

@@ -21,7 +21,7 @@ import org.lwjgl.input.Keyboard;
         clientSideOnly = true)
 public final class OptimusMod {
     public static final String MODID = "optimus";
-    public static final String VERSION = "1.0.1";
+    public static final String VERSION = "1.0.3";
     static ClientSettings settings;
     static ClientEvents events;
     static KeyBinding toggleKey;
@@ -38,6 +38,7 @@ public final class OptimusMod {
     public void preInit(FMLPreInitializationEvent event) {
         settings = new ClientSettings(event.getModConfigurationDirectory());
         routeDirectory = event.getModConfigurationDirectory();
+        routeHintsEnabled = settings.routeHintsEnabled;
         reloadRoutes();
     }
 
@@ -82,6 +83,8 @@ public final class OptimusMod {
                         OptimusMod::notice);
         Runtime.getRuntime().addShutdownHook(new Thread(mapExports::close, "Optimus map cleanup"));
         events = new ClientEvents();
+        Runtime.getRuntime()
+                .addShutdownHook(new Thread(events::closeRecording, "Optimus recording cleanup"));
         MinecraftForge.EVENT_BUS.register(events);
         FMLCommonHandler.instance().bus().register(events);
         ClientCommandHandler.instance.registerCommand(new OptimusCommand());
@@ -110,12 +113,17 @@ public final class OptimusMod {
     }
 
     static java.util.List<String> terminalCommand(String[] args, boolean emergency) {
-        if (emergency && "start".equals(args[0]))
+        if (emergency
+                && ("start".equals(args[0])
+                        || "guard".equals(args[0])
+                                && args.length == 2
+                                && !args[1].equalsIgnoreCase("off")
+                                && !args[1].equalsIgnoreCase("status")))
             throw new IllegalArgumentException("Start blocked while F9 is held.");
         java.util.List<String> replies = new java.util.ArrayList<>();
         terminalNotices.set(replies);
         try {
-            new OptimusCommand().processRemote(Minecraft.getMinecraft().thePlayer, args);
+            new OptimusCommand().processCommand(Minecraft.getMinecraft().thePlayer, args);
             if ("start".equals(args[0])) events.processRequestedStart();
             return replies;
         } finally {

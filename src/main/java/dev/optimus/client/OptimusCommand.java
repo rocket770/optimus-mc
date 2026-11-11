@@ -17,8 +17,8 @@ public final class OptimusCommand extends CommandBase {
     private List<String> remoteReplies;
 
     private void notice(String message) {
-        OptimusMod.notice(message);
-        if (remoteReplies != null) remoteReplies.add(message);
+        if (remoteReplies == null) OptimusMod.notice(message);
+        else remoteReplies.add(message);
     }
 
     List<String> processRemote(ICommandSender sender, String[] args) {
@@ -67,6 +67,15 @@ public final class OptimusCommand extends CommandBase {
         ClientSettings settings = OptimusMod.settings;
         Minecraft mc = Minecraft.getMinecraft();
         switch (action) {
+            case "guard":
+                notice(
+                        remoteReplies != null
+                                        && (args.length == 1
+                                                || args.length == 2
+                                                        && args[1].equalsIgnoreCase("status"))
+                                ? OptimusMod.events.guardSummary()
+                                : OptimusMod.events.guardCommand(args));
+                return;
             case "ml":
                 notice(
                         args.length <= 2
@@ -149,7 +158,7 @@ public final class OptimusCommand extends CommandBase {
                 notice("Targets cleared.");
                 return;
             case "status":
-                OptimusMod.events.printStatus();
+                if (remoteReplies == null) OptimusMod.events.printStatus();
                 return;
             case "profile":
                 if (args.length != 2) {
@@ -163,10 +172,10 @@ public final class OptimusCommand extends CommandBase {
                     notice("Unknown profile. Use balanced, baseline or paced.");
                     return;
                 }
-                OptimusMod.events.stop("Combat profile changed");
                 settings.combatProfile = profile;
                 settings.save();
-                notice("Profile: " + profile.id() + ". /o start to resume.");
+                OptimusMod.events.controlOptionsChanged();
+                notice("Profile: " + profile.id() + ".");
                 return;
             case "seed":
                 if (args.length != 2) {
@@ -180,10 +189,10 @@ public final class OptimusCommand extends CommandBase {
                     notice("Invalid integer seed.");
                     return;
                 }
-                OptimusMod.events.stop("Combat seed changed");
                 settings.combatSeed = seed;
                 settings.save();
-                notice("Seed: " + seed + ". /o start to resume.");
+                OptimusMod.events.controlOptionsChanged();
+                notice("Seed: " + seed + ".");
                 return;
             case "testserver":
             case "route":
@@ -265,6 +274,7 @@ public final class OptimusCommand extends CommandBase {
                     "controller",
                     "operator",
                     "weapon",
+                    "guard",
                     "add",
                     "remove",
                     "list",
@@ -279,6 +289,16 @@ public final class OptimusCommand extends CommandBase {
                     "routes",
                     "visuals",
                     "map");
+        if (args[0].equalsIgnoreCase("guard") && args.length == 2)
+            return getListOfStringsMatchingLastWord(args, "off", "status", "keys", "share");
+        if (args[0].equalsIgnoreCase("guard")
+                && args.length == 3
+                && args[1].equalsIgnoreCase("keys"))
+            return getListOfStringsMatchingLastWord(args, "auto", "on", "off", "bind");
+        if (args[0].equalsIgnoreCase("guard")
+                && args.length == 3
+                && args[1].equalsIgnoreCase("share"))
+            return getListOfStringsMatchingLastWord(args, "on", "off");
         if (args.length == 2 && args[0].equalsIgnoreCase("ml"))
             return getListOfStringsMatchingLastWord(
                     args, "off", "shadow", "live", "reload", "status");
@@ -320,6 +340,7 @@ public final class OptimusCommand extends CommandBase {
     }
 
     private void printHelp() {
+        notice("/o guard <player>|off|status | keys auto|on|off|bind | share on|off");
         notice("/o ml off|shadow|live|reload|status | /o logging on|off|status");
         notice("/o map export <name> [radius 8-64] | status | cancel (loaded terrain only)");
         notice("/o start | stop | status (F8 starts, F9 stops)");
@@ -332,7 +353,7 @@ public final class OptimusCommand extends CommandBase {
         notice("/o parkour on|off | /o profile balanced|baseline|paced | /o seed <integer>");
         notice("/o routes status|reload|on|off (reload reads config/optimus-route-hints.json)");
         notice("/o visuals on|off|status (waypoints, blocks, jump projections and movement trail)");
-        notice("Changing parkour, profile or seed stops the bot; /o start resumes");
+        notice("Guard and combat option changes preserve an active run.");
         notice("/o controller <main name> pairs chat control: !o [all|@BotName] <command>");
         notice("/o pit a|b saves pit corners | /o entrance saves the entry point");
         notice("/o preset supplied loads saved coordinates | /o locraw checks the lobby");
@@ -399,18 +420,21 @@ public final class OptimusCommand extends CommandBase {
             return;
         }
         if (args.length == 2 && args[1].equalsIgnoreCase("reload")) {
-            OptimusMod.events.stop("Reloading route hints");
+            boolean loaded = OptimusMod.reloadRoutes();
+            if (loaded) OptimusMod.events.controlOptionsChanged();
             notice(
-                    OptimusMod.reloadRoutes()
-                            ? OptimusMod.routeStatus() + ". /o start to resume."
+                    loaded
+                            ? OptimusMod.routeStatus()
                             : "Routes not replaced: " + OptimusMod.routeIssue);
             return;
         }
         if (args.length == 2
                 && (args[1].equalsIgnoreCase("on") || args[1].equalsIgnoreCase("off"))) {
-            OptimusMod.events.stop("Route hints changed");
             OptimusMod.routeHintsEnabled = args[1].equalsIgnoreCase("on");
-            notice(OptimusMod.routeStatus() + ". /o start to resume.");
+            OptimusMod.settings.routeHintsEnabled = OptimusMod.routeHintsEnabled;
+            OptimusMod.settings.save();
+            OptimusMod.events.controlOptionsChanged();
+            notice(OptimusMod.routeStatus());
             return;
         }
         notice("Usage: /o routes status|reload|on|off");

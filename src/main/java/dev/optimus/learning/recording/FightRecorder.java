@@ -1,17 +1,14 @@
 package dev.optimus.learning.recording;
 
-import com.google.gson.*;
-import java.io.*;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicLong;
+import com.google.gson.JsonObject;
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayDeque;
 
 /** Local observations for later training. No identity/chat data and no live weight updates. */
 public final class FightRecorder implements CombatRecording, AutoCloseable {
     private final File directory;
-    private Session session;
+    private RecordingWriter session;
     private Object opponent;
     private int episode;
     private int life;
@@ -44,7 +41,7 @@ public final class FightRecorder implements CombatRecording, AutoCloseable {
         this.directory = directory;
     }
 
-    public void start(String mode, String version) {
+    public synchronized void start(String mode, String version) {
         close();
         episode = life = 0;
         inLife = false;
@@ -56,22 +53,22 @@ public final class FightRecorder implements CombatRecording, AutoCloseable {
         outcomeSerial = decisionSerial = 0;
         targets.clear();
         try {
-            session = new Session(directory, mode, version);
+            session = new RecordingWriter(directory, mode, version);
         } catch (IOException error) {
             System.err.println("[Optimus ML] Fight recording unavailable: " + error);
         }
     }
 
-    public String status() {
-        Session s = session;
-        return s == null ? "off" : s.failed ? "failed" : "active; dropped=" + s.dropped.get();
+    public synchronized String status() {
+        RecordingWriter s = session;
+        return s == null ? "off" : s.failed() ? "failed" : "active; dropped=" + s.dropped();
     }
 
-    public boolean active() {
-        return session != null && !session.failed;
+    public synchronized boolean active() {
+        return session != null && !session.failed();
     }
 
-    public void observe(long tick, Object target, String name, JsonObject state) {
+    public synchronized void observe(long tick, Object target, String name, JsonObject state) {
         if (!select(tick, target, name)) return;
         if (tick == lastTick) return;
         lastTick = tick;
@@ -107,7 +104,8 @@ public final class FightRecorder implements CombatRecording, AutoCloseable {
         return true;
     }
 
-    public void combatDecision(long tick, Object target, String name, JsonObject state) {
+    public synchronized void combatDecision(
+            long tick, Object target, String name, JsonObject state) {
         if (target == null) {
             if (!active()) return;
             beginLife(tick);
@@ -126,11 +124,11 @@ public final class FightRecorder implements CombatRecording, AutoCloseable {
         session.offer(state);
     }
 
-    public void end(long tick, String reason) {
+    public synchronized void end(long tick, String reason) {
         end(tick, reason, null);
     }
 
-    public void end(long tick, String reason, JsonObject observation) {
+    public synchronized void end(long tick, String reason, JsonObject observation) {
         if (session != null && opponent != null) {
             JsonObject end = event("episode_end", tick);
             end.addProperty("episode", episode);
@@ -142,7 +140,7 @@ public final class FightRecorder implements CombatRecording, AutoCloseable {
         opponent = null;
     }
 
-    public void beginLife(long tick) {
+    public synchronized void beginLife(long tick) {
         if (!active() || inLife || awaitingReturn) return;
         inLife = true;
         life++;
@@ -150,18 +148,19 @@ public final class FightRecorder implements CombatRecording, AutoCloseable {
         lastTick = Long.MIN_VALUE;
         JsonObject start = event("life_start", tick);
         start.addProperty("life", life);
-        start.addProperty("dropped_total", session.dropped.get());
+        start.addProperty("dropped_total", session.dropped());
         session.offer(start);
     }
 
-    public void endLife(long tick, String reason, boolean death, JsonObject observation) {
+    public synchronized void endLife(
+            long tick, String reason, boolean death, JsonObject observation) {
         if (!active() || !inLife) return;
         end(tick, reason, observation);
         JsonObject end = event("life_end", tick);
         end.addProperty("life", life);
         end.addProperty("reason", reason);
         end.addProperty("death", death);
-        end.addProperty("dropped_total", session.dropped.get());
+        end.addProperty("dropped_total", session.dropped());
         if (observation != null) end.add("observation", observation);
         session.offer(end);
         inLife = false;
@@ -172,7 +171,7 @@ public final class FightRecorder implements CombatRecording, AutoCloseable {
         }
     }
 
-    public void physicalDeath(long tick, String reason, JsonObject observation) {
+    public synchronized void physicalDeath(long tick, String reason, JsonObject observation) {
         if (awaitingReturn) {
             awaitingReturn = false;
             return;
@@ -180,7 +179,7 @@ public final class FightRecorder implements CombatRecording, AutoCloseable {
         endLife(tick, reason, true, observation);
     }
 
-    public void confirmedOutcome(long tick, boolean death, String other) {
+    public synchronized void confirmedOutcome(long tick, boolean death, String other) {
         if (!active()) return;
         JsonObject row = event("combat_outcome", tick);
         row.addProperty("source", "server_kill_feed");
@@ -227,13 +226,21 @@ public final class FightRecorder implements CombatRecording, AutoCloseable {
         session.offer(row);
     }
 
-    public void close() {
-        Session s = session;
+    public synchronized void close() {
+        finish(250);
+    }
+
+    public synchronized void shutdown() {
+        finish(2000);
+    }
+
+    private void finish(long timeoutMillis) {
+        RecordingWriter s = session;
         if (s == null) return;
         endLife(latestObservation, "session_stopped", false, null);
         end(lastTick == Long.MIN_VALUE ? 0 : lastTick, "session_stopped");
         session = null;
-        s.close();
+        s.close(timeoutMillis);
     }
 
     private static JsonObject event(String type, long tick) {
@@ -241,108 +248,5 @@ public final class FightRecorder implements CombatRecording, AutoCloseable {
         e.addProperty("type", type);
         e.addProperty("tick", tick);
         return e;
-    }
-
-    private static final class Session implements AutoCloseable {
-        final ArrayBlockingQueue<String> queue = new ArrayBlockingQueue<>(2048);
-        final AtomicLong dropped = new AtomicLong();
-        final File directory;
-        final String id = UUID.randomUUID().toString(), mode, version;
-        volatile boolean running = true, failed;
-        BufferedWriter writer;
-        long bytes;
-        int part;
-        final Thread thread;
-
-        Session(File directory, String mode, String version) throws IOException {
-            this.directory = directory;
-            this.mode = mode;
-            this.version = version;
-            Files.createDirectories(directory.toPath());
-            openPart();
-            thread = new Thread(this::run, "duelguard-fight-recorder");
-            thread.setDaemon(true);
-            thread.start();
-        }
-
-        void openPart() throws IOException {
-            File file = new File(directory, "fight-" + id + "-" + (part++) + ".jsonl");
-            writer = Files.newBufferedWriter(file.toPath(), StandardCharsets.UTF_8);
-            bytes = 0;
-            JsonObject meta = new JsonObject();
-            meta.addProperty("type", "session");
-            meta.addProperty("schema", 2);
-            meta.addProperty("session", id);
-            meta.addProperty("version", version);
-            meta.addProperty("mode", mode);
-            meta.addProperty("feature_contract", "DGML16-v1");
-            meta.addProperty("pit_return_is_death", true);
-            meta.addProperty("outcome_contract", "server-feed-v1");
-            meta.addProperty("combat_contract", "aim-timing-v1");
-            meta.addProperty(
-                    "health_note",
-                    "remote health and hurt are observations; hit attribution is uncertain in a multiplayer pit");
-            write(meta.toString());
-            writer.flush();
-        }
-
-        void offer(JsonObject value) {
-            if (!running || failed) return;
-            if (!queue.offer(value.toString())) dropped.incrementAndGet();
-        }
-
-        void write(String row) throws IOException {
-            writer.write(row);
-            writer.newLine();
-            bytes += row.length() + 1;
-        }
-
-        void run() {
-            long flushed = System.nanoTime();
-            try {
-                while (running || !queue.isEmpty()) {
-                    String row;
-                    try {
-                        row = queue.poll(100, TimeUnit.MILLISECONDS);
-                    } catch (InterruptedException interrupted) {
-                        continue;
-                    }
-                    if (row != null) write(row);
-                    if (bytes >= 32L * 1024 * 1024) {
-                        writer.close();
-                        openPart();
-                    }
-                    if (System.nanoTime() - flushed >= 1000000000L) {
-                        writer.flush();
-                        flushed = System.nanoTime();
-                    }
-                }
-                JsonObject end = new JsonObject();
-                end.addProperty("type", "session_end");
-                end.addProperty("dropped", dropped.get());
-                write(end.toString());
-            } catch (IOException error) {
-                failed = true;
-                System.err.println("[Optimus ML] Fight recording stopped: " + error);
-            } finally {
-                try {
-                    writer.close();
-                } catch (IOException error) {
-                    failed = true;
-                    System.err.println("[Optimus ML] Fight recording close failed: " + error);
-                }
-            }
-        }
-
-        public void close() {
-            // Interrupting a writer backed by FileChannel can discard its
-            // buffered final rows. Poll is bounded; let it drain normally.
-            running = false;
-            try {
-                thread.join(250);
-            } catch (InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-            }
-        }
     }
 }

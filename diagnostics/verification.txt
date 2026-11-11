@@ -1,14 +1,17 @@
-Optimus 1.0.1 - verified 11 November 2026
+Optimus 1.0.3 - verified 11 November 2026
 Java 8 / Gradle 2.7 / Windows
 
-Fresh-cache dependency restore and full release build: PASS
-54 JVM test invocations (17 core, 15 adapter/map, 20 replay groups, 2 export checks): PASS
+Full release build and 66 JVM test invocations: PASS
+65 delayed guard combat scenarios: PASS
+338 Windows input, binding and prediction checks: PASS
+JVM shutdown: 500 observations flushed; life/session sealed
 Standalone core runner: PASS
+Python learning pipeline: 37 tests passed
+Restored recordings: offline preparation completed
 Editor loader and 335,416 graph/UI checks: PASS
 27 JSON/schematic/Anvil/ZIP import checks: PASS
-Chrome local-file WebGL, native/world imports and map download: PASS
-15-case replay viewer and SVG checks: PASS
+Chrome local-file WebGL, imports and map download: PASS
+Five saved route drafts: imported successfully
 Example world: 32,251 block states, 106 signs and 20 chunks verified
-Source and example-data privacy/naming scan: PASS
 
 These are offline checks. Live gameplay has not been smoke-tested.

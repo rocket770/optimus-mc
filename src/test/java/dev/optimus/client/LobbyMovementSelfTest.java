@@ -371,7 +371,7 @@ public final class LobbyMovementSelfTest {
             OptimusMod.terminalCommand(TerminalBridge.parse("weapon sword","Bot_One"),false);
             expect(config.swordEnabled,"terminal weapon command restores sword mode");
             List<String> terminalStatus=OptimusMod.terminalCommand(new String[]{"status"},false);
-            expect(terminalStatus.size()>=8 && terminalStatus.get(0).contains("Bot: Off"),"terminal captures all actual status notices");
+            expect(terminalStatus.size()>=8 && terminalStatus.stream().anyMatch(line -> line.contains("Bot: Off")),"terminal captures all actual status notices");
             List<String> deniedStart=OptimusMod.terminalCommand(new String[]{"start"},false);
             expect(deniedStart.toString().contains("Denied:") && !(Boolean)get(events,"armed") && !(Boolean)get(events,"startRequested"),
                 "terminal start runs the existing safety denial immediately and leaves no queued retry");

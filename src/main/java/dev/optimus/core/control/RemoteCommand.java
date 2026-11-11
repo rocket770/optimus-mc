@@ -7,6 +7,7 @@ public final class RemoteCommand {
     private static final Set<String> ALLOWED =
             new HashSet<>(
                     Arrays.asList(
+                            "guard",
                             "ml",
                             "logging",
                             "record",
@@ -31,7 +32,7 @@ public final class RemoteCommand {
             new HashSet<>(
                     Arrays.asList(
                             "start", "stop", "add", "remove", "list", "clear", "all", "listed",
-                            "weapon"));
+                            "weapon", "guard"));
 
     private RemoteCommand() {}
 
@@ -70,9 +71,19 @@ public final class RemoteCommand {
         if (!ALLOWED.contains(args[0]))
             throw new IllegalArgumentException(
                     "Remote control cannot change pairing/calibration or run server commands.");
+        if (args[0].equals("guard") && args.length > 1 && args[1].equalsIgnoreCase("share"))
+            throw new IllegalArgumentException("Sharing is local only.");
+        if (args[0].equals("guard")
+                && args.length == 3
+                && args[1].equalsIgnoreCase("keys")
+                && args[2].equalsIgnoreCase("bind"))
+            throw new IllegalArgumentException("Window binding is local only.");
+        if (limited
+                && args[0].equals("guard")
+                && (args.length > 2 || args.length == 2 && args[1].equalsIgnoreCase("keys")))
+            throw new IllegalArgumentException("Controller only.");
         if (limited && !OPERATOR.contains(args[0]))
-            throw new IllegalArgumentException(
-                    "Operators can only start, stop, control targets and select sword/fist.");
+            throw new IllegalArgumentException("Controller only.");
         return args;
     }
 

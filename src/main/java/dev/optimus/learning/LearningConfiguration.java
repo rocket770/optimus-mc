@@ -1,14 +1,8 @@
 package dev.optimus.learning;
 
-import java.io.ByteArrayOutputStream;
+import dev.optimus.core.config.PropertiesStore;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.AtomicMoveNotSupportedException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.util.Arrays;
 import java.util.Locale;
 import java.util.Properties;
 
@@ -51,17 +45,8 @@ public final class LearningConfiguration {
     }
 
     public static LearningConfiguration load(File directory) throws IOException {
-        Properties values = new Properties();
-        File primary = new File(directory, "optimus-ml.properties");
-        File source = primary.isFile() ? primary : new File(directory, "duelguard-ml.properties");
-        if (source.isFile()) {
-            try (InputStream input = Files.newInputStream(source.toPath())) {
-                values.load(input);
-            } catch (IllegalArgumentException error) {
-                throw new IOException("Invalid ML properties", error);
-            }
-        }
-        return new LearningConfiguration(directory, values);
+        return new LearningConfiguration(
+                directory, PropertiesStore.read(new File(directory, "optimus-ml.properties")));
     }
 
     public static LearningConfiguration defaults(File directory) {
@@ -77,29 +62,7 @@ public final class LearningConfiguration {
         next.putAll(values);
         next.setProperty(key, value);
         LearningConfiguration replacement = new LearningConfiguration(directory, next);
-        Path folder = directory.toPath().toAbsolutePath();
-        Files.createDirectories(folder);
-        Path temporary = Files.createTempFile(folder, "optimus-ml-", ".tmp");
-        try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            next.store(bytes, "Optimus ML");
-            byte[] contents = bytes.toByteArray();
-            int end = contents.length;
-            while (end > 0 && (contents[end - 1] == '\n' || contents[end - 1] == '\r')) end--;
-            Files.write(temporary, Arrays.copyOf(contents, end));
-            Path destination = folder.resolve("optimus-ml.properties");
-            try {
-                Files.move(
-                        temporary,
-                        destination,
-                        StandardCopyOption.ATOMIC_MOVE,
-                        StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException error) {
-                Files.move(temporary, destination, StandardCopyOption.REPLACE_EXISTING);
-            }
-        } finally {
-            Files.deleteIfExists(temporary);
-        }
+        PropertiesStore.write(new File(directory, "optimus-ml.properties"), next);
         return replacement;
     }
 }
