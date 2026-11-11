@@ -1,0 +1,10 @@
+READ_ONLY_PIT_SNAPSHOT_V3
+capturedUtc=2026-10-14T23:10:36.261Z
+server=hypixel.net
+pitA=-25.0 62.5 -127.0
+pitB=25.0 78.0 -77.0
+sameWorld=true
+loadedColumns=3025
+missingColumns=0
+nonAirBlocks=32251
+complete=true

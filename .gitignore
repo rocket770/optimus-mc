@@ -1,0 +1,40 @@
+# Build output and local tools
+/build/
+/.*/
+!/.github/
+/.test-classes/
+/out/
+/dist/
+/run/
+/logs/
+**/node_modules/
+**/__pycache__/
+*.py[cod]
+*.class
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+*.log
+*.tmp
+*.zip
+!exports/*.zip
+
+# Local settings, credentials and editor drafts
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.properties
+!gradle/wrapper/gradle-wrapper.properties
+!examples/pit/optimus.properties
+/config/
+/optimus/
+/editor/drafts/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Keep one current verification summary
+/diagnostics/*
+!/diagnostics/verification.txt
+!/diagnostics/captured-navigation-summary.csv

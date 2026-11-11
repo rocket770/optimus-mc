@@ -1,0 +1,12 @@
+[
+  {
+    "modid": "optimus",
+    "name": "Optimus",
+    "description": "Paired main-account chat controls, full-lobby navigation in all verified Duels lobbies, bounded parkour and pit-only combat.",
+    "version": "${version}",
+    "mcversion": "1.8.9",
+    "authorList": ["Optimus project"],
+    "credits": "Fail-closed lobby verification, exact target allowlist and manual emergency stop.",
+    "url": ""
+  }
+]

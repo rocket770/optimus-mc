@@ -1,0 +1,224 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        maven { url = 'https://maven.minecraftforge.net' }
+    }
+    dependencies {
+        classpath 'net.minecraftforge.gradle:ForgeGradle:2.1-SNAPSHOT'
+    }
+}
+apply plugin: 'net.minecraftforge.gradle.forge'
+
+version = '1.0.1'
+group = 'dev.optimus'
+archivesBaseName = 'Optimus-Forge189'
+
+sourceCompatibility = targetCompatibility = '1.8'
+compileJava.options.encoding = 'UTF-8'
+
+task wrapper(type: Wrapper) {
+    gradleVersion = '2.7'
+}
+
+tasks.withType(Zip) {
+    includeEmptyDirs = false
+}
+
+jar {
+    from('LICENSE') {
+        into 'META-INF'
+        rename { 'LICENSE.txt' }
+    }
+}
+
+minecraft {
+    version = '1.8.9-11.15.1.2318-1.8.9'
+    mappings = 'stable_22'
+    runDir = 'run'
+}
+
+processResources {
+    inputs.property 'version', project.version
+    inputs.property 'mcversion', project.minecraft.version
+    from(sourceSets.main.resources.srcDirs) {
+        include 'mcmod.info'
+        expand 'version': project.version, 'mcversion': project.minecraft.version
+    }
+    from(sourceSets.main.resources.srcDirs) { exclude 'mcmod.info' }
+    // The release route graph lives in src/main/resources so source builds are reproducible.
+}
+
+// The same dependency-free suites run from Gradle, PowerShell and Bash.
+def selfTestClasses = [:]
+file('scripts/core-test-suites.txt').readLines('UTF-8')
+    .collect { it.trim() }
+    .findAll { it && !it.startsWith('#') }
+    .each { testClass ->
+        def simpleName = testClass.tokenize('.').last()
+        def taskName = simpleName.substring(0, 1).toLowerCase() + simpleName.substring(1)
+        selfTestClasses[taskName] = testClass
+    }
+selfTestClasses += [
+    transitionSelfTest: 'dev.optimus.client.TransitionWatchSelfTest',
+    remoteChatSelfTest: 'dev.optimus.client.RemoteChatSelfTest',
+    remoteControlSelfTest: 'dev.optimus.client.RemoteControlSelfTest',
+    combatAimSelfTest: 'dev.optimus.client.CombatAimSelfTest',
+    lobbyMovementSelfTest: 'dev.optimus.client.LobbyMovementSelfTest',
+    terminalBridgeSelfTest: 'dev.optimus.client.TerminalBridgeSelfTest',
+    platformJumpSelfTest: 'dev.optimus.client.PlatformJumpSelfTest',
+    capturedParkourSelfTest: 'dev.optimus.core.CapturedParkourSelfTest',
+    combatHandoffSelfTest: 'dev.optimus.client.CombatHandoffSelfTest',
+    combatBenchmarkSelfTest: 'dev.optimus.client.CombatBenchmarkSelfTest',
+    navigationOverlaySelfTest: 'dev.optimus.client.NavigationOverlaySelfTest',
+    routeHintsSelfTest: 'dev.optimus.client.RouteHintsSelfTest',
+    mapExportSelfTest: 'dev.optimus.map.MapExportSelfTest',
+    mapExportServiceSelfTest: 'dev.optimus.client.map.MapExportServiceSelfTest',
+    specificPitJumpSelfTest: 'dev.optimus.client.SpecificPitJumpSelfTest'
+]
+selfTestClasses.each { taskName, testClass ->
+    tasks.create(taskName, JavaExec) {
+        dependsOn testClasses
+        group = 'verification'
+        main = testClass
+        if(taskName=='combatBenchmarkSelfTest' && project.hasProperty('benchmarkHealth'))
+            systemProperty 'optimus.benchmarkHealth',project.property('benchmarkHealth')
+        if(taskName=='navigationOverlaySelfTest' && project.hasProperty('renderVisuals'))
+            systemProperty 'optimus.renderVisuals','true'
+        classpath = sourceSets.test.runtimeClasspath
+    }
+}
+check.dependsOn selfTestClasses.keySet()
+
+// Named scenarios share the real navigation/combat replay harness.
+def navigationReplays = [
+    capturedNavigationSelfTest: [],
+    slabAndDropSelfTest: ['slab-and-drop'],
+    reportedRoofSelfTest: ['reported-roof'],
+    reportedJumpsSelfTest: ['reported-jumps'],
+    wasdNavigationSelfTest: ['wasd'],
+    steeringNavigationSelfTest: ['steering'],
+    reportedPostSelfTest: ['post'],
+    normalBlockClimbSelfTest: ['block-climbs'],
+    postCombatSelfTest: ['post-combat'],
+    jumpsCombatSelfTest: ['jumps-combat'],
+    longGapNavigationSelfTest: ['long-gap'],
+    longGapCombatSelfTest: ['long-gap-combat'],
+    jumpAttackSelfTest: ['jump-attack'],
+    stairSprintSelfTest: ['stairs'],
+    stairSprintCombatSelfTest: ['stairs-combat'],
+    routeHintsNavigationSelfTest: ['hints'],
+    routeHintsCombatSelfTest: ['hints-combat'],
+    routeHandoffSelfTest: ['hint-handoff'],
+    routeShortcutSelfTest: ['hint-shortcuts'],
+    optionalHintsSelfTest: ['optional-hints']
+]
+navigationReplays.each { taskName, replayArgs ->
+    tasks.create(taskName, JavaExec) {
+        dependsOn testClasses
+        group = 'verification'
+        main = 'dev.optimus.client.CapturedNavigationSelfTest'
+        args replayArgs
+        if(project.hasProperty('hintCase')) systemProperty 'optimus.hintCase',project.property('hintCase')
+        if(project.hasProperty('bundledHints')) systemProperty 'optimus.bundledHints','true'
+        classpath = sourceSets.test.runtimeClasspath
+    }
+}
+check.dependsOn navigationReplays.keySet()
+
+task editorMomentumJumpSelfTest(type:JavaExec, dependsOn:'exportWaypointMap') {
+    group = 'verification'
+    main = 'dev.optimus.client.EditorMomentumJumpSelfTest'
+    classpath = sourceSets.test.runtimeClasspath
+}
+check.dependsOn editorMomentumJumpSelfTest
+
+task verifyPitExport(type: JavaExec, dependsOn: testClasses) {
+    group = 'verification'
+    main = 'dev.optimus.client.PitExportSelfTest'
+    classpath = sourceSets.test.runtimeClasspath
+}
+
+task exportWaypointMap(type: JavaExec, dependsOn: testClasses) {
+    group = 'distribution'
+    main = 'dev.optimus.core.WaypointMapExporter'
+    classpath = sourceSets.test.runtimeClasspath
+    args 'editor/pit-map.js'
+    inputs.file 'src/test/resources/dev/optimus/core/duels-pit-2026-10-15.tsv.gz'
+    inputs.files sourceSets.main.allSource, sourceSets.test.allSource
+    outputs.file 'editor/pit-map.js'
+    maxHeapSize = '1024m'
+}
+
+task waypointEditorBundle(type: Zip, dependsOn: exportWaypointMap) {
+    archiveName = "${archivesBaseName}-${version}-waypoint-editor.zip"
+    destinationDir = file("$buildDir/libs")
+    from('editor') { include 'index.html', 'style.css', 'bootstrap.js', 'app.js', 'graph.js', 'pit-map.js', 'README.md', 'map/**', 'vendor/**' }
+    from('LICENSE')
+}
+// Keep the working editor folder current. Create an editor ZIP only on explicit request.
+build.dependsOn exportWaypointMap
+
+task terminalBundle(type: Zip, dependsOn: reobfJar) {
+    archiveName = "${archivesBaseName}-${version}-terminal.zip"
+    destinationDir = file("$buildDir/libs")
+    from(jar.archivePath)
+    from('terminal')
+    from('LICENSE')
+}
+// ZIP bundles are optional distribution tasks; normal builds leave the working folders in place.
+
+task releaseBundle(type: Zip, dependsOn: [reobfJar, check, verifyPitExport, exportWaypointMap]) {
+    group = 'distribution'
+    description = 'Package the verified Optimus mod with its existing offline editor and terminal.'
+    archiveName = "${archivesBaseName}-${version}-release.zip"
+    destinationDir = file("$buildDir/libs")
+    from(jar.archivePath)
+    into('editor') {
+        from('editor') { include 'index.html', 'style.css', 'bootstrap.js', 'app.js', 'graph.js', 'pit-map.js', 'README.md', 'map/**', 'vendor/**' }
+    }
+    into('terminal') { from('terminal') { include 'Optimus-Terminal.cmd', 'Optimus-Terminal.ps1', 'README.txt' } }
+    from('README.md')
+    from('LICENSE')
+    into('examples') { from('examples') }
+    into('exports') {
+        from('exports') { include 'README.md', 'Hypixel-Duels-Pit-2026-10-15.zip', 'Hypixel-Duels-Pit-2026-10-15.schematic' }
+    }
+    into('diagnostics') { from('diagnostics') { include 'verification.txt', 'captured-navigation-summary.csv' } }
+    into('docs') { from('docs') }
+    from('DISCLAIMER.md')
+}
+build.dependsOn releaseBundle
+
+// Gradle 2.7 excludes .gitignore even as an explicit file. Stage it under
+// a neutral name, then restore its name inside the source archive.
+task prepareSourceBundle {
+    def ignoreFile = file("$buildDir/source-bundle/gitignore")
+    def attributesFile = file("$buildDir/source-bundle/gitattributes")
+    inputs.files '.gitignore', '.gitattributes'
+    outputs.files ignoreFile, attributesFile
+    doLast {
+        ignoreFile.parentFile.mkdirs()
+        ignoreFile.bytes = file('.gitignore').bytes
+        attributesFile.bytes = file('.gitattributes').bytes
+    }
+}
+
+// Use an explicit source allowlist so local caches, reports and sessions stay local.
+task sourceBundle(type: Zip, dependsOn: [prepareSourceBundle, exportWaypointMap]) {
+    group = 'distribution'
+    description = 'Package source, test fixtures, documentation and offline maps.'
+    archiveName = "${archivesBaseName}-${version}-source.zip"
+    destinationDir = file("$buildDir/libs")
+    from(prepareSourceBundle.outputs.files) { rename { '.' + it } }
+    from('examples/pit/optimus.properties') { into 'examples/pit' }
+    from(projectDir) {
+        include 'build.gradle', 'settings.gradle', 'README.md', 'LICENSE', 'gradlew', 'gradlew.bat'
+        include 'gradle/wrapper/**'
+        include 'src/**', 'scripts/**', 'terminal/**', 'docs/**', 'examples/**'
+        include 'exports/Hypixel-Duels-Pit-2026-10-15.zip', 'exports/Hypixel-Duels-Pit-2026-10-15.schematic', 'exports/README.md'
+        include 'diagnostics/verification.txt', 'diagnostics/captured-navigation-summary.csv', 'DISCLAIMER.md'
+        include 'editor/index.html', 'editor/style.css', 'editor/bootstrap.js', 'editor/app.js', 'editor/graph.js', 'editor/pit-map.js', 'editor/README.md'
+        include 'editor/map/**', 'editor/vendor/**'
+        exclude '**/*.class', '**/__pycache__/**', '**/*.pyc', '**/optimus.properties', '**/.DS_Store', '**/Thumbs.db'
+    }
+}

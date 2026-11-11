@@ -1,0 +1,411 @@
+<div id="optimus-parkour-replay">
+  <h3>Saved Duels pit · parkour replay</h3>
+  <div class="viz-controls">
+    <label class="form-label"
+      >Test location<select class="form-select" id="optimus-case"></select
+    ></label>
+    <label class="form-label"
+      >Replay<select class="form-select" id="optimus-revision">
+        <option value="after">Current</option>
+        <option value="before">Comparison</option>
+      </select></label
+    >
+  </div>
+  <div id="optimus-result" class="text-small" aria-live="polite"></div>
+  <svg
+    id="optimus-scene"
+    role="img"
+    aria-label="Actual saved collision boxes and the selected bot movement trace"
+  ></svg>
+  <label class="form-label" for="optimus-frame"
+    >Movement tick <span id="optimus-tick" class="tabular-nums"></span
+  ></label>
+  <input
+    id="optimus-frame"
+    class="form-range"
+    type="range"
+    min="0"
+    value="0"
+    step="1"
+  />
+  <div
+    id="optimus-detail"
+    class="text-small tabular-nums"
+    aria-live="polite"
+  ></div>
+  <svg
+    id="optimus-overview"
+    role="img"
+    aria-label="Top view of the saved pit, showing the selected test inside the full pit"
+  ></svg>
+  <div class="text-small text-muted">
+    Collision snapshot saved 13 Oct 2026 · X −25…25, Z −127…−77 · native
+    movement replay
+  </div>
+</div>
+<style>
+  #optimus-parkour-replay {
+    color: var(--foreground);
+  }
+  #optimus-parkour-replay svg {
+    display: block;
+    width: 100%;
+    overflow: visible;
+  }
+  #optimus-parkour-replay svg text {
+    fill: var(--foreground);
+    font-size: 12px;
+    font-weight: 400;
+  }
+  #optimus-parkour-replay #optimus-detail {
+    min-height: 3em;
+    overflow-wrap: anywhere;
+  }
+  #optimus-parkour-replay #optimus-result {
+    margin-top: 12px;
+  }
+  #optimus-parkour-replay #optimus-overview {
+    max-height: 210px;
+    margin-top: 12px;
+  }
+</style>
+<script>
+  (() => {
+    const data = /*REPLAY_DATA*/ {};
+    const root = document.getElementById('optimus-parkour-replay');
+    const q = (id) => root.querySelector('#optimus-' + id);
+    const scene = q('scene'),
+      overview = q('overview'),
+      picker = q('case'),
+      revision = q('revision'),
+      slider = q('frame');
+    const ns = 'http://www.w3.org/2000/svg';
+    const el = (tag, attrs = {}, parent = scene, text) => {
+      const n = document.createElementNS(ns, tag);
+      Object.entries(attrs).forEach(([k, v]) => n.setAttribute(k, v));
+      if (text !== undefined) n.textContent = text;
+      parent.appendChild(n);
+      return n;
+    };
+    let selected = 'wool_diagonal_step',
+      version = 'after',
+      frame = 0;
+    for (const item of data.cases) {
+      const o = document.createElement('option');
+      o.value = item.id;
+      o.textContent = item.label;
+      picker.appendChild(o);
+    }
+    const item = () =>
+      data.cases.find((c) => c.id === selected) || data.cases[0];
+    const frames = () => item()[version] || item().after;
+    const line = (points, attrs = {}, parent = scene) =>
+      el(
+        'polyline',
+        {
+          points: points.map((p) => p.join(',')).join(' '),
+          fill: 'none',
+          ...attrs
+        },
+        parent
+      );
+    function draw() {
+      const c = item(),
+        trace = frames(),
+        p = trace[frame];
+      const width = Math.max(280, root.getBoundingClientRect().width),
+        height = Math.max(280, Math.min(410, width * 0.62));
+      scene.replaceChildren();
+      scene.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      scene.setAttribute('height', height);
+      const raw = (x, y, z) => [(x - z) * 0.866, (x + z) * 0.44 - y];
+      const vertices = [];
+      c.boxes.forEach((b) => {
+        for (const x of [b[1], b[4]])
+          for (const y of [b[2], b[5]])
+            for (const z of [b[3], b[6]]) vertices.push(raw(x, y, z));
+      });
+      for (const t of [c.start, c.goal, ...trace.map((r) => r.slice(0, 3))]) {
+        vertices.push(raw(...t));
+        vertices.push(raw(t[0], t[1] + 1.8, t[2]));
+      }
+      const xs = vertices.map((v) => v[0]),
+        ys = vertices.map((v) => v[1]);
+      const loX = Math.min(...xs),
+        hiX = Math.max(...xs),
+        loY = Math.min(...ys),
+        hiY = Math.max(...ys);
+      const scale = Math.min(
+        (width - 48) / (hiX - loX || 1),
+        (height - 68) / (hiY - loY || 1)
+      );
+      const project = (x, y, z) => {
+        const a = raw(x, y, z);
+        return [
+          (width - (hiX - loX) * scale) / 2 + (a[0] - loX) * scale,
+          32 + (a[1] - loY) * scale
+        ];
+      };
+      const polygon = (points, fill, opacity = 1) =>
+        el('polygon', {
+          points: points.map((v) => project(...v).join(',')).join(' '),
+          fill,
+          'fill-opacity': opacity,
+          stroke: 'var(--border)',
+          'stroke-width': 0.65
+        });
+      [...c.boxes]
+        .sort((a, b) => a[1] + a[3] + a[2] * 0.01 - (b[1] + b[3] + b[2] * 0.01))
+        .forEach((b) => {
+          const [id, x, y, z, X, Y, Z] = b;
+          polygon(
+            [
+              [x, y, Z],
+              [X, y, Z],
+              [X, Y, Z],
+              [x, Y, Z]
+            ],
+            'var(--muted)',
+            0.85
+          );
+          polygon(
+            [
+              [X, y, z],
+              [X, y, Z],
+              [X, Y, Z],
+              [X, Y, z]
+            ],
+            'var(--secondary)',
+            0.9
+          );
+          polygon(
+            [
+              [x, Y, z],
+              [X, Y, z],
+              [X, Y, Z],
+              [x, Y, Z]
+            ],
+            'var(--card)',
+            0.96
+          );
+        });
+      line(
+        trace.map((r) => project(r[0], r[1] + 0.04, r[2])),
+        {
+          stroke: 'var(--viz-series-1)',
+          'stroke-width': 2.5,
+          'stroke-linejoin': 'round'
+        }
+      );
+      const start = project(...c.start),
+        goal = project(...c.goal);
+      el('circle', {
+        cx: start[0],
+        cy: start[1],
+        r: 4,
+        fill: 'var(--foreground)'
+      });
+      el('rect', {
+        x: goal[0] - 4,
+        y: goal[1] - 4,
+        width: 8,
+        height: 8,
+        fill: 'var(--viz-series-2)'
+      });
+      el(
+        'text',
+        {
+          x: Math.max(8, Math.min(width - 110, start[0] - 40)),
+          y: Math.max(16, start[1] + 22)
+        },
+        scene,
+        `Start · Y ${c.start[1]}`
+      );
+      el(
+        'text',
+        {
+          x: Math.max(8, Math.min(width - 110, goal[0] - 40)),
+          y: Math.max(16, goal[1] - 14)
+        },
+        scene,
+        `Goal · Y ${c.goal[1]}`
+      );
+      const [x, y, z] = p;
+      polygon(
+        [
+          [x - 0.3, y, z + 0.3],
+          [x + 0.3, y, z + 0.3],
+          [x + 0.3, y + 1.8, z + 0.3],
+          [x - 0.3, y + 1.8, z + 0.3]
+        ],
+        'var(--viz-series-1)',
+        0.32
+      );
+      polygon(
+        [
+          [x + 0.3, y, z - 0.3],
+          [x + 0.3, y, z + 0.3],
+          [x + 0.3, y + 1.8, z + 0.3],
+          [x + 0.3, y + 1.8, z - 0.3]
+        ],
+        'var(--viz-series-1)',
+        0.5
+      );
+      polygon(
+        [
+          [x - 0.3, y + 1.8, z - 0.3],
+          [x + 0.3, y + 1.8, z - 0.3],
+          [x + 0.3, y + 1.8, z + 0.3],
+          [x - 0.3, y + 1.8, z + 0.3]
+        ],
+        'var(--viz-series-1)',
+        0.65
+      );
+      const marker = project(x, y, z);
+      el('circle', {
+        cx: marker[0],
+        cy: marker[1],
+        r: 4,
+        fill: 'var(--viz-series-1)'
+      });
+      q('tick').textContent = `${frame + 1} / ${trace.length}`;
+      q('result').textContent =
+        `${version === 'after' ? 'Arrived' : 'Baseline' + (c.beforeFailed ? ' stalled' : ' arrived')} · ${trace.length} ticks (${(trace.length / 20).toFixed(2)} s) · ${c.start.join(', ')} → ${c.goal.join(', ')}`;
+      const keys =
+        [
+          p[4] ? 'W' : '',
+          p[5] ? 'S' : '',
+          p[6] ? 'Space' : '',
+          p[7] ? 'Sprint' : ''
+        ]
+          .filter(Boolean)
+          .join(' + ') || 'Released';
+      q('detail').textContent =
+        `${p[8]} · ${keys} · (${x.toFixed(3)}, ${y.toFixed(3)}, ${z.toFixed(3)})`;
+      overview.replaceChildren();
+      overview.setAttribute('viewBox', `0 0 ${width} 210`);
+      overview.setAttribute('height', 210);
+      const size = 164,
+        ox = (width - size) / 2,
+        oz = 28,
+        unit = size / 50;
+      el(
+        'text',
+        { x: 8, y: 16 },
+        overview,
+        'Location in the full pit · top view'
+      );
+      data.tops.forEach((t) =>
+        el(
+          'rect',
+          {
+            x: ox + (t[0] + 25) * unit,
+            y: oz + (t[1] + 127) * unit,
+            width: unit + 0.1,
+            height: unit + 0.1,
+            fill: 'var(--foreground)',
+            opacity: 0.05 + Math.min(0.45, (t[2] - 63) * 0.045)
+          },
+          overview
+        )
+      );
+      const mx = (v) => ox + (v + 25) * unit,
+        mz = (v) => oz + (v + 127) * unit;
+      el(
+        'rect',
+        {
+          x: ox,
+          y: oz,
+          width: size,
+          height: size,
+          fill: 'none',
+          stroke: 'var(--border)',
+          'stroke-width': 1
+        },
+        overview
+      );
+      line(
+        [c.start, c.goal].map((t) => [mx(t[0]), mz(t[2])]),
+        { stroke: 'var(--viz-series-1)', 'stroke-width': 2 },
+        overview
+      );
+      el(
+        'circle',
+        {
+          cx: mx(c.start[0]),
+          cy: mz(c.start[2]),
+          r: 4,
+          fill: 'var(--foreground)'
+        },
+        overview
+      );
+      el(
+        'rect',
+        {
+          x: mx(c.goal[0]) - 4,
+          y: mz(c.goal[2]) - 4,
+          width: 8,
+          height: 8,
+          fill: 'var(--viz-series-2)'
+        },
+        overview
+      );
+      el('text', { x: ox + size + 8, y: oz + 14 }, overview, 'Z −127');
+      el('text', { x: ox + size + 8, y: oz + size }, overview, 'Z −77');
+      el('text', { x: ox, y: 205 }, overview, 'X −25');
+      el('text', { x: ox + size - 42, y: 205 }, overview, 'X 25');
+    }
+    function sync() {
+      const c = item();
+      if (!c[version]) version = 'after';
+      picker.value = c.id;
+      revision.value = version;
+      revision.querySelector('[value="before"]').disabled = !c.before;
+      slider.max = frames().length - 1;
+      frame = Math.max(0, Math.min(frame, frames().length - 1));
+      slider.value = frame;
+      draw();
+    }
+    function save() {
+      try {
+        window.localStorage.setItem(
+          'optimus-replay',
+          JSON.stringify({ selected, version, frame })
+        );
+      } catch (_) {}
+    }
+    function restore(state) {
+      const s = state;
+      if (s && data.cases.some((c) => c.id === s.selected)) {
+        selected = s.selected;
+        version = s.version === 'before' ? 'before' : 'after';
+        frame = Number.isFinite(s.frame) ? s.frame : 0;
+      }
+      sync();
+    }
+    picker.addEventListener('change', () => {
+      selected = picker.value;
+      frame = 0;
+      sync();
+      save();
+    });
+    revision.addEventListener('change', () => {
+      version = revision.value;
+      frame = 0;
+      sync();
+      save();
+    });
+    slider.addEventListener('input', () => {
+      frame = Number(slider.value);
+      draw();
+    });
+    slider.addEventListener('change', save);
+    new ResizeObserver(draw).observe(root);
+    frame = item().after.length - 1;
+    let saved = null;
+    try {
+      saved = JSON.parse(window.localStorage.getItem('optimus-replay'));
+    } catch (_) {}
+    restore(saved);
+  })();
+</script>

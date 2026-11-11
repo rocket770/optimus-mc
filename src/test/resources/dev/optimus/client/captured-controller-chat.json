@@ -1,0 +1,23 @@
+{
+    "strikethrough":  false,
+    "extra":  [
+                  {
+                      "strikethrough":  false,
+                      "clickEvent":  {
+                                         "action":  "run_command",
+                                         "value":  "/viewprofile FixtureUser"
+                                     },
+                      "text":  "§f?§f (§f§lS7) §f§lNoDebuff §f§lDivision 1 §b[MVP§d+§b] FixtureUser§f"
+                  },
+                  {
+                      "bold":  false,
+                      "italic":  false,
+                      "underlined":  false,
+                      "strikethrough":  false,
+                      "obfuscated":  false,
+                      "color":  "white",
+                      "text":  ": !o say hi"
+                  }
+              ],
+    "text":  ""
+}

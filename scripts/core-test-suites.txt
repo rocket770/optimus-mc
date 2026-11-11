@@ -1,0 +1,18 @@
+# Dependency-free suites shared by Gradle and the standalone test runners.
+dev.optimus.core.CoreSelfTest
+dev.optimus.core.NavigationSelfTest
+dev.optimus.core.ParkourSelfTest
+dev.optimus.core.CommandSelfTest
+dev.optimus.core.CollisionReplaySelfTest
+dev.optimus.core.CombatFollowSelfTest
+dev.optimus.core.PitPatrolSelfTest
+dev.optimus.core.MovementUpgradeSelfTest
+dev.optimus.core.CombatClicksSelfTest
+dev.optimus.core.CombatMovementSelfTest
+dev.optimus.core.CombatTurnSelfTest
+dev.optimus.core.NearbySteeringSelfTest
+dev.optimus.core.SprintGapSelfTest
+dev.optimus.core.CombatHopSelfTest
+dev.optimus.core.CombatEngagementSelfTest
+dev.optimus.core.CombatStabilitySelfTest
+dev.optimus.core.NavigationViewSelfTest

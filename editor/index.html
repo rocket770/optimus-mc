@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Optimus · Route workshop</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <span class="logo">↗</span>
+        <div>
+          <strong>OPTIMUS</strong
+          ><span
+            >Route workshop ·
+            <span id="editor-version">Loading editor…</span></span
+          >
+        </div>
+      </div>
+      <span class="draft">OFFLINE EDITOR</span>
+      <div class="actions">
+        <button id="open-map">Open map</button
+        ><button id="download-map">Download map</button
+        ><input
+          id="map-file"
+          type="file"
+          accept=".json,.schematic,.mca,.zip"
+          hidden
+        /><button id="undo">Undo</button
+        ><button id="import">Import hints</button
+        ><button id="export" class="primary">Export hints ↗</button
+        ><input id="file" type="file" accept=".json,application/json" hidden />
+      </div>
+    </header>
+    <main>
+      <aside>
+        <div class="intro">
+          <span class="eyebrow">OPTIMUS &middot; MAP &amp; ROUTE WORKSHOP</span>
+          <h1>Plan the connections.<br />Let the bot choose its steps.</h1>
+          <p>
+            Pick supported areas at the right height, then preview a connection
+            between them.
+          </p>
+        </div>
+        <section class="map-import-options">
+          <h2>World import area</h2>
+          <p class="hint">
+            Worlds and schematics open around their center unless coordinates
+            are set. Optimus map JSON opens its complete captured area.
+          </p>
+          <div class="row">
+            <label
+              >Center X<input
+                id="import-x"
+                type="number"
+                step="1"
+                placeholder="Map center" /></label
+            ><label
+              >Center Z<input
+                id="import-z"
+                type="number"
+                step="1"
+                placeholder="Map center"
+            /></label>
+          </div>
+          <label
+            >Radius (blocks)<input
+              id="import-radius"
+              type="number"
+              min="8"
+              max="128"
+              step="1"
+              value="32"
+          /></label>
+          <p class="hint">
+            Open an Optimus export ZIP, map JSON, Minecraft 1.8.x world ZIP,
+            .mca region, or classic .schematic. Files stay on this computer.
+          </p>
+        </section>
+        <div class="tools">
+          <button id="inspect" class="active">① Explore</button
+          ><button id="add">② Add area</button
+          ><button id="connect">③ Connect</button>
+        </div>
+        <section>
+          <div class="section-title">
+            <h2>Areas</h2>
+            <span id="area-count"></span>
+          </div>
+          <div id="areas" class="list"></div>
+          <div id="area-form" class="form">
+            <label
+              >Area name<input
+                id="area-name"
+                maxlength="60"
+                placeholder="Click a top surface to begin"
+            /></label>
+            <div class="row">
+              <label>Standing Y<input id="area-height" readonly /></label
+              ><label
+                >Radius <span id="radius-text">1.1 blocks</span
+                ><input
+                  id="area-radius"
+                  type="range"
+                  min="0.4"
+                  max="3.5"
+                  step="0.1"
+                  value="1.1"
+              /></label>
+            </div>
+            <p id="area-position" class="hint">
+              Use the height cutaway to reach lower surfaces.
+            </p>
+            <div class="row">
+              <button id="save-area" class="primary" disabled>Save area</button
+              ><button id="remove-area" disabled>Remove</button>
+            </div>
+          </div>
+        </section>
+        <section>
+          <div class="section-title">
+            <h2>Connections</h2>
+            <span id="link-count"></span>
+          </div>
+          <div id="links" class="list"></div>
+          <div class="form">
+            <div class="row">
+              <label>From<select id="from"></select></label
+              ><label>To<select id="to"></select></label>
+            </div>
+            <button id="swap">Swap direction and preview</button
+            ><label class="check"
+              ><input type="checkbox" id="parkour" checked /> Include
+              model-checked jumps</label
+            ><label class="check"
+              ><input type="checkbox" id="both" /> Check both directions
+              separately</label
+            >
+            <div class="row">
+              <button id="preview">Preview route</button
+              ><button id="save-link" class="primary" disabled>
+                Save connection
+              </button>
+            </div>
+            <p id="route-detail" class="hint" role="status">
+              Connections are directed. Drops and climbs can have different
+              return routes.
+            </p>
+            <button id="remove-link" disabled>
+              Remove selected connection
+            </button>
+          </div>
+        </section>
+        <section class="notes">
+          <h2>Suggested starting points</h2>
+          <p>
+            The bundled Duels pit includes editable platform, roof and stair
+            suggestions. Imported maps begin with an empty route draft.
+          </p>
+          <button id="suggest">Restore suggestions</button
+          ><button id="clear">Start empty</button>
+          <p>
+            Optimus captures include native collision routes. World and
+            schematic imports use a conservative walking model. Live navigation
+            still checks terrain, momentum and reachable melee.
+          </p>
+        </section>
+      </aside>
+      <div class="workspace">
+        <div class="map-toolbar">
+          <div>
+            <strong id="map-name">Captured Duels pit</strong
+            ><span id="map-stats"></span>
+          </div>
+          <div class="view-controls">
+            <label
+              >Height cutaway<select id="height">
+                <option value="Infinity">All elevations</option>
+              </select></label
+            ><button id="top">Top view</button
+            ><button id="reset">Reset view</button>
+          </div>
+        </div>
+        <div id="viewport">
+          <canvas
+            id="map"
+            aria-label="Interactive three-dimensional captured pit map"
+          ></canvas
+          ><canvas id="labels"></canvas>
+          <div class="map-legend">
+            <span><i class="green"></i> Saved area</span
+            ><span><i class="orange"></i> Selected route</span
+            ><span><i class="blue"></i> Model route</span>
+          </div>
+          <div id="instruction">
+            Drag to orbit · Shift-drag or right-drag to pan · Scroll to zoom
+          </div>
+        </div>
+        <footer>
+          <span id="status" role="status">Loading captured terrain…</span
+          ><span id="coordinates">X — &nbsp; Y — &nbsp; Z —</span>
+        </footer>
+      </div>
+    </main>
+    <script src="bootstrap.js?build=workshop-r4"></script>
+  </body>
+</html>
