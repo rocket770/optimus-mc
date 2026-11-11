@@ -1,0 +1,4 @@
+mode=shadow
+confidence=0.35
+fusion=hybrid
+record=false

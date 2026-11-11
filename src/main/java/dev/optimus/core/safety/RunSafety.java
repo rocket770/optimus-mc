@@ -32,6 +32,12 @@ public final class RunSafety {
         return phase == Phase.CHECK_LOBBY;
     }
 
+    public boolean observingArena(Object currentWorld) {
+        return currentWorld != null
+                && world == currentWorld
+                && (phase == Phase.ACTIVE || phase == Phase.RECOVERING);
+    }
+
     public boolean mayControl() {
         return phase == Phase.ACTIVE;
     }

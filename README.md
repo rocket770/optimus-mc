@@ -6,6 +6,7 @@ Put the JAR in `mods/`, restart Minecraft, then run `/o help`. Chat commands use
 
 - [Running the bot and commands](docs/BOT.md)
 - [Combat profiles](docs/COMBAT.md)
+- [Optional movement ML and training](docs/ML.md)
 - [Navigation and route editing](docs/NAVIGATION.md)
 - [Map downloads and imports](docs/MAPS.md)
 - [Editor](editor/README.md) / [Terminal](terminal/README.txt) / [Tests](docs/TESTS.md)

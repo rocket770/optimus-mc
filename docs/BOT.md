@@ -19,3 +19,5 @@ The preset is for the [example pit](../examples/pit/README.md). Pair the control
 Useful commands: `target all|listed`, `target clear`, `weapon sword|fist`, `profile balanced|baseline|paced`, `parkour on|off`, `visuals on|off`, and `status`. Use `operator add Name` to grant target, weapon and start/stop control.
 
 Local commands use `/o`; chat uses `!o`. `!o @BotName stop` addresses one bot. F8 toggles a run; F9 always stops it. Settings live in `config/optimus.properties`.
+
+Optional learning: `/o ml off|shadow|live|reload|status` and `/o logging on|off|status` (`record` is an alias). Mode and recording changes preserve the active run. Remote changes are controller-only. See [ML setup and scope](ML.md).

@@ -3,6 +3,8 @@ package dev.optimus.client;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import dev.optimus.client.learning.CombatTelemetry;
+import dev.optimus.core.combat.KillFeed;
 import dev.optimus.core.control.ChatMessage;
 import dev.optimus.core.control.RemoteCommand;
 import dev.optimus.core.geometry.PitRegion;
@@ -12,6 +14,7 @@ import dev.optimus.core.safety.ControlPolicy;
 import dev.optimus.core.safety.LobbySafety;
 import dev.optimus.core.safety.RunSafety;
 import dev.optimus.core.safety.ServerSafety;
+import dev.optimus.learning.LearningSession;
 import java.io.IOException;
 import java.util.List;
 import java.util.Random;
@@ -64,11 +67,25 @@ public final class ClientEvents {
     private final MovementInput input;
     private final CombatController combat;
     private final NavigationController navigation;
+    private final LearningSession learning;
+    private final CombatTelemetry telemetry;
+    private final KillFeed killFeed = new KillFeed();
 
     ClientEvents() {
         input = new MovementInput(mc);
-        combat = new CombatController(mc, navigator, input, this);
+        learning =
+                new LearningSession(new java.io.File(mc.mcDataDir, "config"), OptimusMod.VERSION);
+        telemetry = new CombatTelemetry(mc, learning.recording());
+        combat = new CombatController(mc, navigator, input, this, learning, telemetry);
         navigation = new NavigationController(mc, navigator, input, this);
+    }
+
+    String mlCommand(String value) {
+        return learning.mlCommand(value);
+    }
+
+    String loggingCommand(String value) {
+        return learning.loggingCommand(value);
     }
 
     long tick() {
@@ -278,6 +295,10 @@ public final class ClientEvents {
         navigationOverlay.clear();
         run.stop();
         releaseKeys();
+        // Disable control and release keys before any bounded recorder drain.
+        learning.close();
+        telemetry.reset();
+        killFeed.reset();
         navigator.reset();
         combat.resetFocus();
         navigation.resetSteering();
@@ -394,6 +415,7 @@ public final class ClientEvents {
         mc.gameSettings.pauseOnLostFocus =
                 remoteControl.keepActive(mc.gameSettings.pauseOnLostFocus);
         armed = true;
+        learning.start();
         run.startChecking(now());
         patrolRandom.setSeed(OptimusMod.settings.combatSeed);
         combat.begin(OptimusMod.settings.combatSeed, tickNo);
@@ -422,6 +444,7 @@ public final class ClientEvents {
     }
 
     void printStatus() {
+        OptimusMod.notice(learning.status());
         ClientSettings s = OptimusMod.settings;
         OptimusMod.notice(
                 "Bot: "
@@ -798,6 +821,21 @@ public final class ClientEvents {
     public void onChat(ClientChatReceivedEvent event) {
         if (!RemoteChat.chatType(event.type) || !ServerSafety.isHypixel(connectedServer())) return;
         if (remoteChat(event.message, event.type)) return;
+        if (armed
+                && mc.thePlayer != null
+                && mc.theWorld == sessionWorld
+                && watchReady()
+                && transitionWatch.hardSerial() == seenHard
+                && transitionWatch.fatalSerial() == seenFatal
+                && run.observingArena(mc.theWorld)
+                && learning.recording().active()) {
+            String line =
+                    net.minecraft.util.EnumChatFormatting.getTextWithoutFormattingCodes(
+                            event.message.getUnformattedText());
+            KillFeed.Outcome outcome = killFeed.accept(line, mc.thePlayer.getName(), tickNo);
+            if (outcome != null)
+                learning.recording().confirmedOutcome(tickNo, outcome.death, outcome.other);
+        }
         if (!lobbySafety.pending()) return;
         String raw = event.message.getUnformattedText().trim();
         if (!raw.startsWith("{") || !raw.endsWith("}")) return;
@@ -880,6 +918,7 @@ public final class ClientEvents {
             return;
         }
         if (serial != seenSerial) {
+            if (!run.joining()) telemetry.death(tickNo, "self_death_respawn");
             releaseKeys();
             navigator.reset();
             enteredPit = false;
@@ -948,6 +987,8 @@ public final class ClientEvents {
         input.clearCombatInput();
         transitions();
         if (!armed) return;
+        if (enteredPit && mc.theWorld == sessionWorld && alive() && !playerInPit())
+            telemetry.death(tickNo, "self_death_pit_return");
         if (run.expired(now())) {
             stop("Lobby join/recovery timed out");
             return;
@@ -1010,6 +1051,7 @@ public final class ClientEvents {
             return;
         }
         if (!alive()) {
+            telemetry.death(tickNo, "self_dead_observed");
             releaseKeys();
             navigator.reset();
             if (run.phase() == RunSafety.Phase.ACTIVE) {
@@ -1087,9 +1129,17 @@ public final class ClientEvents {
             navigator.reset();
         }
         if (enteredPit) {
-            if (controlAllowed())
+            if (controlAllowed()) {
+                learning.recording().beginLife(tickNo);
                 combat.fight(OptimusMod.settings.hypixelPit, position(mc.thePlayer));
-            else stop(navigationFailure(OptimusMod.settings.hypixelPit));
+                telemetry.end(
+                        tickNo,
+                        input.snapshot(),
+                        armed && controlAllowed(),
+                        navigator.jumpInProgress()
+                                ? "jump"
+                                : mc.thePlayer.onGround ? "ground" : "air");
+            } else stop(navigationFailure(OptimusMod.settings.hypixelPit));
             return;
         }
         if (entryGoal == null) {

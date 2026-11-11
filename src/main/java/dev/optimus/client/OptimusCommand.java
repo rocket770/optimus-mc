@@ -67,6 +67,20 @@ public final class OptimusCommand extends CommandBase {
         ClientSettings settings = OptimusMod.settings;
         Minecraft mc = Minecraft.getMinecraft();
         switch (action) {
+            case "ml":
+                notice(
+                        args.length <= 2
+                                ? OptimusMod.events.mlCommand(args.length == 1 ? "status" : args[1])
+                                : "Usage: /o ml off|shadow|live|reload|status");
+                return;
+            case "logging":
+            case "record":
+                notice(
+                        args.length <= 2
+                                ? OptimusMod.events.loggingCommand(
+                                        args.length == 1 ? "status" : args[1])
+                                : "Usage: /o logging on|off|status");
+                return;
             case "map":
                 handleMap(args);
                 return;
@@ -239,6 +253,9 @@ public final class OptimusCommand extends CommandBase {
             return getListOfStringsMatchingLastWord(
                     args,
                     "help",
+                    "ml",
+                    "logging",
+                    "record",
                     "say",
                     "start",
                     "startz",
@@ -262,6 +279,12 @@ public final class OptimusCommand extends CommandBase {
                     "routes",
                     "visuals",
                     "map");
+        if (args.length == 2 && args[0].equalsIgnoreCase("ml"))
+            return getListOfStringsMatchingLastWord(
+                    args, "off", "shadow", "live", "reload", "status");
+        if (args.length == 2
+                && (args[0].equalsIgnoreCase("logging") || args[0].equalsIgnoreCase("record")))
+            return getListOfStringsMatchingLastWord(args, "on", "off", "status");
         boolean target = args[0].equalsIgnoreCase("target") || args[0].equalsIgnoreCase("targets");
         if (target && args.length == 2)
             return getListOfStringsMatchingLastWord(
@@ -297,6 +320,7 @@ public final class OptimusCommand extends CommandBase {
     }
 
     private void printHelp() {
+        notice("/o ml off|shadow|live|reload|status | /o logging on|off|status");
         notice("/o map export <name> [radius 8-64] | status | cancel (loaded terrain only)");
         notice("/o start | stop | status (F8 starts, F9 stops)");
         notice("/o target add <name> | remove <name> | list | clear | all | listed");

@@ -1,5 +1,6 @@
 package dev.optimus.client;
 
+import dev.optimus.client.learning.CombatTelemetry;
 import dev.optimus.core.combat.CombatAim;
 import dev.optimus.core.combat.CombatClicks;
 import dev.optimus.core.combat.CombatFocus;
@@ -13,6 +14,8 @@ import dev.optimus.core.combat.ComboEscape;
 import dev.optimus.core.geometry.CollisionGeometry;
 import dev.optimus.core.geometry.PitRegion;
 import dev.optimus.core.geometry.Vec3Point;
+import dev.optimus.core.ml.MovementAdvisor;
+import dev.optimus.core.ml.MovementFeatures;
 import dev.optimus.core.navigation.MotionProgress;
 import dev.optimus.core.navigation.NearbySteering;
 import dev.optimus.core.safety.ControlPolicy;
@@ -28,6 +31,8 @@ final class CombatController {
     private final LobbyNavigator navigator;
     private final MovementInput movement;
     private final ClientEvents session;
+    private final MovementAdvisor advisor;
+    private final CombatTelemetry telemetry;
     private final Random random = new Random();
     private final CombatTurn combatTurn = new CombatTurn();
     private final CombatSpacing combatSpacing = new CombatSpacing();
@@ -48,11 +53,18 @@ final class CombatController {
     private long nextStrafeChange;
 
     CombatController(
-            Minecraft mc, LobbyNavigator navigator, MovementInput input, ClientEvents session) {
+            Minecraft mc,
+            LobbyNavigator navigator,
+            MovementInput input,
+            ClientEvents session,
+            MovementAdvisor advisor,
+            CombatTelemetry telemetry) {
         this.mc = mc;
         this.navigator = navigator;
         this.movement = input;
         this.session = session;
+        this.advisor = advisor;
+        this.telemetry = telemetry;
     }
 
     void release() {
@@ -191,6 +203,7 @@ final class CombatController {
         }
         if (!session.running()) return;
         EntityPlayer target = focusedOpponent(pit, self);
+        telemetry.begin(session.tick(), target);
         Vec3Point pursuitGoal =
                 target == null
                         ? null
@@ -539,6 +552,55 @@ final class CombatController {
             tryingPursuit = false;
         }
 
+        // Learned steering is confined to ordinary, visible, grounded engagement.
+        // Deliberate taps, escape, terrain navigation and attack gates retain ownership.
+        if (profile == CombatProfile.BALANCED
+                && visible
+                && mc.thePlayer.onGround
+                && !reacting
+                && !escaping
+                && tap == CombatTap.Input.NONE
+                && !edgeLaunch
+                && !navigator.jumpInProgress()
+                && !navigator.preparingGap()
+                && !nearbySteering.recovering(session.tick())
+                && (!routeNeeded || direct || nearby || countering)) {
+            NearbySteering.Input baseline =
+                    MovementFeatures.action(
+                            advance, retreat, strafe && strafeSign < 0, strafe && strafeSign > 0);
+            double[] features =
+                    MovementFeatures.features(
+                            horizontalDistance,
+                            yawGap,
+                            radialSpeed,
+                            towardSpeed,
+                            target.posX - target.prevPosX,
+                            target.posZ - target.prevPosZ,
+                            mc.thePlayer.motionX,
+                            mc.thePlayer.motionZ,
+                            mc.thePlayer.rotationYaw,
+                            mc.thePlayer.getHealth(),
+                            target.getHealth(),
+                            mc.thePlayer.hurtTime,
+                            target.hurtTime,
+                            meleePriority,
+                            reacting,
+                            direct,
+                            nearby);
+            telemetry.features(features);
+            NearbySteering.Input chosen =
+                    advisor.choose(
+                            session.tick(),
+                            features,
+                            baseline,
+                            candidate -> safeResponseInput(self, candidate, pit));
+            advance = chosen.forward > 0;
+            retreat = chosen.forward < 0;
+            strafe = chosen.side != 0;
+            if (strafe) strafeSign = -chosen.side;
+            tryingPursuit = advance;
+        }
+
         boolean sprint =
                 combatSpacing.sprint(
                         horizontalDistance,
@@ -832,6 +894,20 @@ final class CombatController {
                     OptimusMod.settings.swordEnabled
                             ? "Waiting for combat sword"
                             : "Waiting for empty slot 2";
+            telemetry.decision(
+                    session.tick(),
+                    target,
+                    targetYaw,
+                    targetPitch,
+                    yawStep,
+                    pitchStep,
+                    false,
+                    combatClicks.ready(session.tick()),
+                    false,
+                    false,
+                    false,
+                    false,
+                    CombatClicks.Action.NONE);
             return;
         }
         double distance = mc.thePlayer.getDistanceToEntity(target);
@@ -899,6 +975,20 @@ final class CombatController {
             mc.thePlayer.swingItem(); // Animation only: never send attackEntity beyond reach.
             combatClicks.performed(action, session.tick(), 0);
         }
+        telemetry.decision(
+                session.tick(),
+                target,
+                targetYaw,
+                targetPitch,
+                yawStep,
+                pitchStep,
+                true,
+                ready,
+                bodyInReach,
+                visible,
+                aiming,
+                canAttack,
+                action);
         String targetLabel =
                 "Target "
                         + target.getName()
@@ -954,6 +1044,7 @@ final class CombatController {
         boolean sprintAtRequest = mc.thePlayer.isSprinting();
         mc.thePlayer.swingItem();
         mc.playerController.attackEntity(mc.thePlayer, target);
+        telemetry.attackRequested(session.tick());
         combatFocus.attacked(session.tick());
         comboEscape.attacked(session.tick());
         if (profile == CombatProfile.BALANCED) combatTap.attacked(session.tick(), sprintAtRequest);

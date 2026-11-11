@@ -59,6 +59,8 @@ file('scripts/core-test-suites.txt').readLines('UTF-8')
         selfTestClasses[taskName] = testClass
     }
 selfTestClasses += [
+    learningSelfTest: 'dev.optimus.learning.LearningSelfTest',
+    learningClientSelfTest: 'dev.optimus.client.LearningClientSelfTest',
     transitionSelfTest: 'dev.optimus.client.TransitionWatchSelfTest',
     remoteChatSelfTest: 'dev.optimus.client.RemoteChatSelfTest',
     remoteControlSelfTest: 'dev.optimus.client.RemoteControlSelfTest',
@@ -80,6 +82,8 @@ selfTestClasses.each { taskName, testClass ->
         dependsOn testClasses
         group = 'verification'
         main = testClass
+        if(taskName=='learningClientSelfTest' && project.hasProperty('learningFixture'))
+            systemProperty 'optimus.learningFixture',project.property('learningFixture')
         if(taskName=='combatBenchmarkSelfTest' && project.hasProperty('benchmarkHealth'))
             systemProperty 'optimus.benchmarkHealth',project.property('benchmarkHealth')
         if(taskName=='navigationOverlaySelfTest' && project.hasProperty('renderVisuals'))
@@ -88,6 +92,13 @@ selfTestClasses.each { taskName, testClass ->
     }
 }
 check.dependsOn selfTestClasses.keySet()
+
+// Optional cross-language verification after preparing a Python training fixture.
+task liveTrainingModelSelfTest(type: JavaExec, dependsOn: testClasses) {
+    main = 'dev.optimus.learning.LiveTrainingModelSelfTest'
+    classpath = sourceSets.test.runtimeClasspath
+    args(project.hasProperty('mlCandidate') ? project.property('mlCandidate') : 'build/ml-smoke/candidate')
+}
 
 // Named scenarios share the real navigation/combat replay harness.
 def navigationReplays = [
@@ -215,6 +226,7 @@ task sourceBundle(type: Zip, dependsOn: [prepareSourceBundle, exportWaypointMap]
         include 'build.gradle', 'settings.gradle', 'README.md', 'LICENSE', 'gradlew', 'gradlew.bat'
         include 'gradle/wrapper/**'
         include 'src/**', 'scripts/**', 'terminal/**', 'docs/**', 'examples/**'
+        include 'ml/run.py', 'ml/optimus_training/**', 'ml/tests/**', 'ml/README.md', 'ml/*.example'
         include 'exports/Hypixel-Duels-Pit-2026-10-15.zip', 'exports/Hypixel-Duels-Pit-2026-10-15.schematic', 'exports/README.md'
         include 'diagnostics/verification.txt', 'diagnostics/captured-navigation-summary.csv', 'DISCLAIMER.md'
         include 'editor/index.html', 'editor/style.css', 'editor/bootstrap.js', 'editor/app.js', 'editor/graph.js', 'editor/pit-map.js', 'editor/README.md'

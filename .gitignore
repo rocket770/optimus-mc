@@ -38,3 +38,6 @@ Thumbs.db
 /diagnostics/*
 !/diagnostics/verification.txt
 !/diagnostics/captured-navigation-summary.csv
+
+# Private recordings, prepared datasets and candidate models
+/ml/live-data/

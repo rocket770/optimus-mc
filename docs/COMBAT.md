@@ -1,6 +1,6 @@
 # Combat
 
-Combat is rule-based; no trained model or weight files are shipped.
+The rule controller owns aim, attacks, targets and navigation. Optional local ML can advise eligible close-combat movement; fresh configurations use shadow mode. See [ML modes, recording and training](ML.md).
 
 - `balanced`: default. Tracks the opponent, adjusts spacing and strafing, reacts to hits, and checks the current hit ray before attacking.
 - `baseline`: simpler distance/angle checks for comparison.

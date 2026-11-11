@@ -7,6 +7,9 @@ public final class RemoteCommand {
     private static final Set<String> ALLOWED =
             new HashSet<>(
                     Arrays.asList(
+                            "ml",
+                            "logging",
+                            "record",
                             "say",
                             "start",
                             "stop",

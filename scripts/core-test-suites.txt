@@ -16,3 +16,6 @@ dev.optimus.core.CombatHopSelfTest
 dev.optimus.core.CombatEngagementSelfTest
 dev.optimus.core.CombatStabilitySelfTest
 dev.optimus.core.NavigationViewSelfTest
+dev.optimus.core.ml.DgmlMovementModelSelfTest
+dev.optimus.core.ml.HybridMovementPolicySelfTest
+dev.optimus.core.KillFeedSelfTest

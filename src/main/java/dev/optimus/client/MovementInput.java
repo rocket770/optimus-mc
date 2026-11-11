@@ -1,5 +1,6 @@
 package dev.optimus.client;
 
+import dev.optimus.core.navigation.MovementState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.settings.KeyBinding;
 
@@ -22,6 +23,10 @@ final class MovementInput {
                     mc.gameSettings.keyBindJump,
                     mc.gameSettings.keyBindSneak
                 };
+    }
+
+    MovementState snapshot() {
+        return MovementState.of(held[0], held[1], held[2], held[3], held[4], held[5], heldSprint);
     }
 
     void reassert() {
