@@ -88,6 +88,13 @@ final class GuardWindowsKeys {
         return "Focus your controller's Minecraft window and press F7 within 30 seconds.";
     }
 
+    void automatic() {
+        boundIdentity = "";
+        boundWindow = bindingUntil = 0;
+        boundProcess = 0;
+        state = "automatic focused-game input";
+    }
+
     Input read(String identity) {
         if (!attempted) {
             attempted = true;
@@ -105,14 +112,14 @@ final class GuardWindowsKeys {
                 state = device.reason();
                 return null;
             }
-            if (!identity.equals(boundIdentity)) {
-                state = "window not bound; use /o guard keys bind";
+            if (!boundIdentity.isEmpty() && !identity.equals(boundIdentity)) {
+                state = "window is bound to another guarded account";
                 return null;
             }
             if (bindingUntil != 0) {
                 if (System.nanoTime() > bindingUntil) {
-                    bindingUntil = 0;
-                    state = "window binding expired; use /o guard keys bind";
+                    automatic();
+                    state = "window binding expired; automatic input resumed";
                     return null;
                 }
                 if (device.down(0x76)) {
@@ -123,10 +130,12 @@ final class GuardWindowsKeys {
                 }
                 return null;
             }
-            if (!matchesWindow()) {
+            if (boundWindow != 0 && !matchesWindow()) {
                 state = "focused window is not the bound controller window";
                 return null;
             }
+            long sampledWindow = device.windowId();
+            int sampledProcess = device.processId();
             int forward = (device.down(0x57) ? 1 : 0) - (device.down(0x53) ? 1 : 0);
             int side = (device.down(0x41) ? 1 : 0) - (device.down(0x44) ? 1 : 0);
             NearbySteering.Input movement = NearbySteering.Input.NONE;
@@ -139,7 +148,9 @@ final class GuardWindowsKeys {
                             device.down(0x10),
                             device.down(0x11),
                             device.down(0x01));
-            if (!device.gameplayFocused() || !matchesWindow()) {
+            if (!device.gameplayFocused()
+                    || sampledWindow != device.windowId()
+                    || sampledProcess != device.processId()) {
                 state = "focus changed during key sampling";
                 return null;
             }

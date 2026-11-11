@@ -113,7 +113,7 @@ public final class GuardController {
             return "Usage: /o guard keys auto|on|off|bind";
         ctx.settings().guardKeys = value;
         ctx.settings().save();
-        input.resetPrediction();
+        input.configureKeys(value);
         return "Guard keys: " + value + ".";
     }
 
@@ -159,7 +159,7 @@ public final class GuardController {
         motion.resetTelemetry();
         input.reset(true);
         input.close();
-        publisher.reset();
+        publisher.stopSharing();
         combat.clear(true);
         timing.reset();
         paused = true;

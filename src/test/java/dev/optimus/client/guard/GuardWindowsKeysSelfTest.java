@@ -105,9 +105,10 @@ public final class GuardWindowsKeysSelfTest {
                 reader.read("main-identity") == null && reads[0] == 0,
                 "unfocused or cursor-released game never reads physical keys");
         focus[0] = true;
+        GuardWindowsKeys.Input automatic = reader.read("main-identity");
         expect(
-                reader.read("main-identity") == null && reads[0] == 0,
-                "an unbound Minecraft window cannot supply gameplay keys");
+                automatic != null && automatic.movement == NearbySteering.Input.FORWARD,
+                "automatic focused-game input starts without a manual binding");
         reader.requestBinding("main-identity");
         keys[0x76] = true;
         expect(reader.read("main-identity") == null, "F7 binds without replaying held movement");
@@ -140,12 +141,12 @@ public final class GuardWindowsKeysSelfTest {
                 "ordinary foreground apps do not qualify");
         expect(GuardWindowsKeys.minecraftWindow("Lunar 1.8.9"), "short Lunar title qualifies");
         expect(
-                reader.status().contains("moving=2"),
+                reader.status().contains("moving=3"),
                 "status retains evidence of sampled movement across focus changes");
         focus[0] = false;
         reader.read("main-identity");
         expect(
-                reader.status().contains("not focused") && reader.status().contains("moving=2"),
+                reader.status().contains("not focused") && reader.status().contains("moving=3"),
                 "fallback reason and previous direct input remain visible");
         expect(
                 GuardWindowsKeys.capturedCursor(true, 1, true),
@@ -179,6 +180,12 @@ public final class GuardWindowsKeysSelfTest {
                 reader.read("main-identity") == null,
                 "a focus switch during the key snapshot discards the whole sample");
         switchDuringSample[0] = false;
+        window[0] = 11;
+        reader.automatic();
+        window[0] = 12;
+        expect(
+                reader.read("main-identity") != null,
+                "automatic mode clears an optional window binding");
         window[0] = 11;
         GuardInputPrediction prediction = new GuardInputPrediction();
         List<Vec3Point> actual = new ArrayList<>();

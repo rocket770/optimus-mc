@@ -52,6 +52,11 @@ final class GuardDesktopInput {
         desktopPrediction.reset();
     }
 
+    void configureKeys(String mode) {
+        if (mode.equals("auto")) desktopKeys.automatic();
+        resetPrediction();
+    }
+
     void release() {
         desktopPrediction.reset();
         desktopAttack = desktopForward = desktopSprint = false;

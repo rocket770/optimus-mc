@@ -12,6 +12,7 @@ final class GuardInputPublisher {
     private final GuardInputRelay relay;
     private boolean sharing, localSwing;
     private int localProgress;
+    // This sequence belongs to the client lifetime, including stops and new runs.
     private long localSwingId, localVictimAt;
     private String localVictim = "";
 
@@ -24,11 +25,9 @@ final class GuardInputPublisher {
         return sharing;
     }
 
-    void reset() {
+    void stopSharing() {
         sharing = localSwing = false;
-        localSwingId = 0;
         localVictim = "";
-        localVictimAt = 0;
         relay.stopPublishing();
     }
 

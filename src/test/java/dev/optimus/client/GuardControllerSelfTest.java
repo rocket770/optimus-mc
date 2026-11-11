@@ -1318,6 +1318,10 @@ public final class GuardControllerSelfTest {
             expect(
                     emergencyBlocked && !(boolean) get(events, "startRequested"),
                     "F9 also blocks a terminal guard command that would start a stopped bot");
+            set(guard, "localSwingId", 37L);
+            guard.reset();
+            expect((long)get(guard, "localSwingId") == 37L,
+                    "reset preserves the publisher's swing sequence for existing subscribers");
         } finally {
             if (logging != null) logging.close();
             if (guard != null) guard.reset();

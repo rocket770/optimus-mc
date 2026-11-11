@@ -84,36 +84,8 @@ public final class GuardCombatSimulationSelfTest {
         }
     }
 
-    private static final class Scenario {
-        final String name;
-        final int ping, phase, jitter;
-        final double gap, kick;
-        final boolean sword, moving, single;
-
-        Scenario(
-                String name,
-                int ping,
-                int phase,
-                int jitter,
-                double gap,
-                double kick,
-                boolean sword,
-                boolean moving,
-                boolean single) {
-            this.name = name;
-            this.ping = ping;
-            this.phase = phase;
-            this.jitter = jitter;
-            this.gap = gap;
-            this.kick = kick;
-            this.sword = sword;
-            this.moving = moving;
-            this.single = single;
-        }
-    }
-
     private static final class Simulation implements AutoCloseable {
-        final Scenario scenario;
+        final GuardSimulationCase scenario;
         final Minecraft mc;
         final World world;
         final Player bot, leader, opponent, main, enemy;
@@ -190,7 +162,7 @@ public final class GuardCombatSimulationSelfTest {
             return scenario.name.contains("response_");
         }
 
-        Simulation(Scenario scenario, Unsafe unsafe, List<String> trace) throws Exception {
+        Simulation(GuardSimulationCase scenario, Unsafe unsafe, List<String> trace) throws Exception {
             this.scenario = scenario;
             this.trace = trace;
             jitter = new Random(731 + scenario.phase);
@@ -748,6 +720,7 @@ public final class GuardCombatSimulationSelfTest {
                         observedResponseAt = now;
                     set(events, "tickNo", tick);
                     guard.step(OptimusMod.settings.hypixelPit, tick, true);
+                    GuardReplayTrace.capture(trace, scenario.name, now, "before-movement", mc, guard, guardRequests);
                     if (responseTest()
                             && responseAt >= 0
                             && now >= 1200
@@ -780,6 +753,7 @@ public final class GuardCombatSimulationSelfTest {
                             });
                     set(events, "tickNo", tick + 1);
                     guard.step(OptimusMod.settings.hypixelPit, tick);
+                    GuardReplayTrace.capture(trace, scenario.name, now, "after-movement", mc, guard, guardRequests);
                     boolean phase = guard.status().contains("phase: fighting");
                     if (phase != fighting) phaseChanges++;
                     fighting = phase;
@@ -1026,11 +1000,11 @@ public final class GuardCombatSimulationSelfTest {
         List<String> trace = new ArrayList<>();
         trace.add("case,time_ms,event,actor,outcome,x,z,target_z,server_ready_ms");
         List<String> failures = new ArrayList<>();
-        List<Scenario> scenarios = new ArrayList<>();
+        List<GuardSimulationCase> scenarios = new ArrayList<>();
         for (int ping : new int[] {200, 250, 300})
             for (int phase : new int[] {0, 25}) {
                 scenarios.add(
-                        new Scenario(
+                        new GuardSimulationCase(
                                 "sword_" + ping + "_" + phase,
                                 ping,
                                 phase,
@@ -1041,7 +1015,7 @@ public final class GuardCombatSimulationSelfTest {
                                 false,
                                 false));
                 scenarios.add(
-                        new Scenario(
+                        new GuardSimulationCase(
                                 "edge_" + ping + "_" + phase,
                                 ping,
                                 phase,
@@ -1052,38 +1026,38 @@ public final class GuardCombatSimulationSelfTest {
                                 false,
                                 false));
             }
-        scenarios.add(new Scenario("single_click_250", 250, 0, 0, 2, 0, true, false, true));
-        scenarios.add(new Scenario("air_reach_250", 250, 0, 0, 3.6, 0, true, false, true));
-        scenarios.add(new Scenario("air_reach_far_250", 250, 0, 0, 4.1, 0, true, false, true));
+        scenarios.add(new GuardSimulationCase("single_click_250", 250, 0, 0, 2, 0, true, false, true));
+        scenarios.add(new GuardSimulationCase("air_reach_250", 250, 0, 0, 3.6, 0, true, false, true));
+        scenarios.add(new GuardSimulationCase("air_reach_far_250", 250, 0, 0, 4.1, 0, true, false, true));
         scenarios.add(
-                new Scenario("other_guarded_air_reach_250", 250, 0, 0, 3.6, 0, true, false, true));
+                new GuardSimulationCase("other_guarded_air_reach_250", 250, 0, 0, 3.6, 0, true, false, true));
         scenarios.add(
-                new Scenario("aim_update_air_reach_250", 250, 0, 0, 3.6, 0, true, false, true));
+                new GuardSimulationCase("aim_update_air_reach_250", 250, 0, 0, 3.6, 0, true, false, true));
         scenarios.add(
-                new Scenario("combat_head_independent_250", 250, 0, 0, 2, 0, true, false, false));
+                new GuardSimulationCase("combat_head_independent_250", 250, 0, 0, 2, 0, true, false, false));
         scenarios.add(
-                new Scenario(
+                new GuardSimulationCase(
                         "combat_head_independent_edge_250", 250, 0, 0, 3.1, 0, true, false, false));
         scenarios.add(
-                new Scenario("combat_response_local_250", 250, 0, 0, 2, 0, true, false, false));
+                new GuardSimulationCase("combat_response_local_250", 250, 0, 0, 2, 0, true, false, false));
         scenarios.add(
-                new Scenario("combat_response_observed_250", 250, 0, 0, 2, 0, true, false, false));
+                new GuardSimulationCase("combat_response_observed_250", 250, 0, 0, 2, 0, true, false, false));
         scenarios.add(
-                new Scenario("movement_response_local_250", 250, 0, 0, 2, 0, true, false, false));
-        scenarios.add(new Scenario("unacknowledged_air_250", 250, 0, 0, 3.6, 0, true, false, true));
-        scenarios.add(new Scenario("echo_target_single_250", 250, 0, 0, 2, 0, true, false, true));
-        scenarios.add(new Scenario("damage_target_single_250", 250, 0, 0, 2, 0, true, false, true));
-        scenarios.add(new Scenario("knockback_single_250", 250, 0, 0, 1.9, .28, true, true, true));
+                new GuardSimulationCase("movement_response_local_250", 250, 0, 0, 2, 0, true, false, false));
+        scenarios.add(new GuardSimulationCase("unacknowledged_air_250", 250, 0, 0, 3.6, 0, true, false, true));
+        scenarios.add(new GuardSimulationCase("echo_target_single_250", 250, 0, 0, 2, 0, true, false, true));
+        scenarios.add(new GuardSimulationCase("damage_target_single_250", 250, 0, 0, 2, 0, true, false, true));
+        scenarios.add(new GuardSimulationCase("knockback_single_250", 250, 0, 0, 1.9, .28, true, true, true));
         scenarios.add(
-                new Scenario(
+                new GuardSimulationCase(
                         "guarded_knockback_fighting_250", 250, 0, 0, 2, 0, true, false, false));
-        scenarios.add(new Scenario("fist_250_jitter", 250, 25, 25, 2, 0, false, false, false));
-        scenarios.add(new Scenario("knockback_250", 250, 0, 0, 1.9, .28, true, true, false));
+        scenarios.add(new GuardSimulationCase("fist_250_jitter", 250, 25, 25, 2, 0, false, false, false));
+        scenarios.add(new GuardSimulationCase("knockback_250", 250, 0, 0, 1.9, .28, true, true, false));
         scenarios.add(
-                new Scenario("knockback_250_jitter", 250, 25, 25, 1.9, .28, true, true, false));
-        scenarios.add(new Scenario("blocked_flank_250", 250, 0, 0, 2.9, 0, true, false, false));
-        scenarios.add(new Scenario("minimal_step_250", 250, 0, 0, 3.1, 0, true, false, false));
-        scenarios.add(new Scenario("too_far_250", 250, 0, 0, 4.2, 0, true, false, false));
+                new GuardSimulationCase("knockback_250_jitter", 250, 25, 25, 1.9, .28, true, true, false));
+        scenarios.add(new GuardSimulationCase("blocked_flank_250", 250, 0, 0, 2.9, 0, true, false, false));
+        scenarios.add(new GuardSimulationCase("minimal_step_250", 250, 0, 0, 3.1, 0, true, false, false));
+        scenarios.add(new GuardSimulationCase("too_far_250", 250, 0, 0, 4.2, 0, true, false, false));
         for (String defense :
                 new String[] {
                     "normal",
@@ -1101,7 +1075,7 @@ public final class GuardCombatSimulationSelfTest {
                     "moving_late_aim"
                 })
             scenarios.add(
-                    new Scenario(
+                    new GuardSimulationCase(
                             "defense_" + defense + "_250",
                             250,
                             0,
@@ -1123,11 +1097,11 @@ public final class GuardCombatSimulationSelfTest {
                     "strafe_keys_noise"
                 })
             scenarios.add(
-                    new Scenario(
+                    new GuardSimulationCase(
                             "movement_" + movement + "_250", 250, 0, 0, 2, 0, true, false, false));
         for (String input : new String[] {"keys", "observed"})
             scenarios.add(
-                    new Scenario(
+                    new GuardSimulationCase(
                             "movement_leader_knockback_" + input + "_250",
                             250,
                             0,
@@ -1140,7 +1114,7 @@ public final class GuardCombatSimulationSelfTest {
         for (String input : new String[] {"keys", "observed"})
             for (String edge : new String[] {"step_down", "step_up"})
                 scenarios.add(
-                        new Scenario(
+                        new GuardSimulationCase(
                                 "movement_" + edge + "_" + input + "_250",
                                 250,
                                 0,
@@ -1150,10 +1124,10 @@ public final class GuardCombatSimulationSelfTest {
                                 true,
                                 false,
                                 false));
-        scenarios.add(new Scenario("movement_catchup_250", 250, 0, 0, 2, 0, true, false, false));
+        scenarios.add(new GuardSimulationCase("movement_catchup_250", 250, 0, 0, 2, 0, true, false, false));
         for (String input : new String[] {"keys", "observed"})
             scenarios.add(
-                    new Scenario(
+                    new GuardSimulationCase(
                             "movement_running_catchup_" + input + "_250",
                             250,
                             0,
@@ -1165,10 +1139,12 @@ public final class GuardCombatSimulationSelfTest {
                             false));
         for (String movement : new String[] {"other_guarded", "other_guarded_strafe"})
             scenarios.add(
-                    new Scenario(
+                    new GuardSimulationCase(
                             "movement_" + movement + "_250", 250, 0, 0, 2, 0, true, false, false));
+        if (Boolean.getBoolean("optimus.guardParity"))
+            scenarios.addAll(GuardSimulationCase.edgeCases());
         try {
-            for (Scenario scenario : scenarios)
+            for (GuardSimulationCase scenario : scenarios)
                 try (Simulation simulation = new Simulation(scenario, unsafe, trace)) {
                     if (!simulation.run()) failures.add(scenario.name);
                 }
@@ -1176,8 +1152,12 @@ public final class GuardCombatSimulationSelfTest {
             singleton.set(null, old);
             OptimusMod.settings = previousSettings;
             Files.write(
-                    Paths.get("diagnostics/guard-combat-latency.csv"),
+                    Paths.get(System.getProperty("optimus.guardTrace", "diagnostics/guard-combat-latency.csv")),
                     String.join("\n", trace).getBytes(StandardCharsets.UTF_8));
+        }
+        if (Boolean.getBoolean("optimus.guardReference")) {
+            GuardReplayParity.verify(trace, failures);
+            return;
         }
         if (!failures.isEmpty())
             throw new AssertionError("Guard latency/combat scenarios failed: " + failures);

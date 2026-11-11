@@ -45,6 +45,10 @@ final class GuardInputTracker {
         desktopInput.resetPrediction();
     }
 
+    void configureKeys(String mode) {
+        desktopInput.configureKeys(mode);
+    }
+
     void reset(boolean telemetry) {
         desktopInput.reset(telemetry);
         observedSwing = false;

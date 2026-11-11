@@ -59,15 +59,6 @@ public final class GuardTestInputs {
                                 return pressed.test(key);
                             }
                         });
-        GuardContext context = (GuardContext) owner(guard, "navigator");
-        reader.requestBinding(context.settings().guardUuid);
-        for (String name : new String[] {"boundWindow", "boundProcess", "bindingUntil"}) {
-            Field binding = GuardWindowsKeys.class.getDeclaredField(name);
-            binding.setAccessible(true);
-            if (name.equals("boundWindow")) binding.setLong(reader, 1);
-            else if (name.equals("boundProcess")) binding.setInt(reader, 1);
-            else binding.setLong(reader, 0);
-        }
         field.set(input, reader);
     }
 }

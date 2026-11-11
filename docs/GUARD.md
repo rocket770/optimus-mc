@@ -18,7 +18,7 @@ Assists use observed swings, probable attackers and recent damage evidence. A ne
 
 Chat commands use `!o`. Operators can select a player, disable guard and query its brief status. Only the controller can change `guard keys`; `guard share` is local-only. Local `/o guard status` includes input-source, key and decision timing diagnostics.
 
-`/o guard keys auto|on|off` controls Windows sampling. For a bot-only installation, run `/o guard keys bind`, focus the controller's Minecraft window and press F7 within 30 seconds. The binding stays local to that window, process and guarded account. Switching windows stops direct input; observed movement remains available. A different guarded player never inherits the binding.
+`/o guard keys auto|on|off` controls Windows sampling. Automatic input works immediately while the controller's game is focused and mouse-captured. If several Minecraft clients are open, `/o guard keys bind` lets you lock input to one window: focus it and press F7 within 30 seconds. A binding belongs to that window, process and guarded account. `/o guard keys auto` clears it.
 
 The optional `/o guard share on|off` relay is for a second local modded client; a bot-only installation does not require it. Remote following is still limited by when the server sends player updates. Ping compensation reduces unnecessary waiting but cannot remove network delay.
 

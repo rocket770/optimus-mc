@@ -9,7 +9,7 @@ buildscript {
 }
 apply plugin: 'net.minecraftforge.gradle.forge'
 
-version = '1.0.3'
+version = '1.0.4'
 group = 'dev.optimus'
 archivesBaseName = 'Optimus-Forge189'
 
@@ -98,6 +98,17 @@ selfTestClasses.each { taskName, testClass ->
     }
 }
 check.dependsOn selfTestClasses.keySet()
+
+task guardParitySelfTest(type: JavaExec, dependsOn: testClasses) {
+    group = 'verification'
+    description = 'Compare native guard decisions with the saved pre-extraction reference.'
+    main = 'dev.optimus.client.GuardCombatSimulationSelfTest'
+    classpath = sourceSets.test.runtimeClasspath
+    systemProperty 'optimus.guardParity', 'true'
+    systemProperty 'optimus.guardReference', 'true'
+    systemProperty 'optimus.guardTrace', "$buildDir/guard-parity.csv"
+}
+check.dependsOn guardParitySelfTest
 
 // Optional cross-language verification after preparing a Python training fixture.
 task liveTrainingModelSelfTest(type: JavaExec, dependsOn: testClasses) {
