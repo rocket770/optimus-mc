@@ -1,7 +1,6 @@
 package dev.optimus.client.guard;
 
 import static dev.optimus.client.guard.GuardContext.box;
-import static dev.optimus.client.guard.GuardContext.position;
 
 import dev.optimus.core.combat.CombatAim;
 import dev.optimus.core.combat.CombatClicks;
@@ -12,6 +11,7 @@ import dev.optimus.core.geometry.Vec3Point;
 import dev.optimus.core.guard.GuardAssist;
 import dev.optimus.core.guard.GuardCombatWindow;
 import dev.optimus.core.guard.GuardFollow;
+import dev.optimus.core.guard.GuardSwingSource;
 import net.minecraft.entity.player.EntityPlayer;
 
 /** Owns guard aim and assist pacing; native attacks still use the shared combat adapter. */
@@ -20,7 +20,8 @@ final class GuardAttack {
     private final CombatClicks clicks;
     private final GuardCombatWindow combatWindow = new GuardCombatWindow();
     private long aimedAt = Long.MIN_VALUE;
-    private boolean airMirrored;
+    private boolean airMirrored, combatAimed;
+    private float aimBaseYaw, aimBasePitch, combatYaw, combatPitch;
 
     GuardAttack(GuardContext ctx, CombatClicks clicks) {
         this.ctx = ctx;
@@ -29,42 +30,75 @@ final class GuardAttack {
 
     void resetAim() {
         aimedAt = Long.MIN_VALUE;
+        combatAimed = false;
     }
 
     void resetWindow() {
         combatWindow.reset();
     }
 
-    void newSwing() {
+    void newSwing(EntityPlayer leader, EntityPlayer target, long tick, GuardSwingSource source) {
         airMirrored = false;
+        // Give the guarded player's hit time to arrive instead of requesting
+        // an identical first hit. Repeated swings cannot extend this wait.
+        if (target != null) {
+            Vec3Point eye =
+                    new Vec3Point(leader.posX, leader.posY + leader.getEyeHeight(), leader.posZ);
+            if (CombatAim.clearPoint(
+                            eye,
+                            box(target),
+                            CombatClicks.ATTACK_REACH,
+                            hit -> ctx.host.guardRay(eye, hit))
+                    != null)
+                combatWindow.awaitDamage(
+                        target.getUniqueID().toString(), tick, ctx.host.guardPingMillis(), source);
+        }
     }
 
     void reset() {
         resetAim();
         resetWindow();
-        newSwing();
+        airMirrored = false;
     }
 
-    void turnToward(float yaw, float pitch, long tick) {
-        turnToward(yaw, pitch, tick, false);
-    }
-
-    void turnToward(float yaw, float pitch, long tick, boolean melee) {
-        if (aimedAt == tick) return;
-        aimedAt = tick;
+    void turnToward(float yaw, float pitch, long tick, boolean combat) {
+        if (aimedAt != tick) {
+            aimedAt = tick;
+            aimBaseYaw = ctx.mc.thePlayer.rotationYaw;
+            aimBasePitch = ctx.mc.thePlayer.rotationPitch;
+            combatAimed = false;
+        }
+        if (combatAimed && !combat) {
+            ctx.mc.thePlayer.rotationYaw = combatYaw;
+            ctx.mc.thePlayer.rotationPitch = combatPitch;
+            return;
+        }
         CombatProfile profile = ctx.settings().combatProfile;
-        ctx.mc.thePlayer.rotationYaw +=
-                GuardFollow.clamp(
-                        CombatTurn.wrap(yaw - ctx.mc.thePlayer.rotationYaw),
-                        melee ? Math.max(60, profile.yawLimit) : profile.yawLimit);
-        ctx.mc.thePlayer.rotationPitch +=
-                GuardFollow.clamp(
-                        pitch - ctx.mc.thePlayer.rotationPitch,
-                        melee ? Math.max(30, profile.pitchLimit) : profile.pitchLimit);
+        // Reassert against navigation within a tick without accumulating extra turn speed.
+        ctx.mc.thePlayer.rotationYaw =
+                aimBaseYaw
+                        + (float)
+                                GuardFollow.clamp(
+                                        CombatTurn.wrap(yaw - aimBaseYaw),
+                                        combat ? Math.max(90, profile.yawLimit) : profile.yawLimit);
+        ctx.mc.thePlayer.rotationPitch =
+                aimBasePitch
+                        + (float)
+                                GuardFollow.clamp(
+                                        pitch - aimBasePitch,
+                                        combat
+                                                ? Math.max(45, profile.pitchLimit)
+                                                : profile.pitchLimit);
+        if (combat) {
+            combatAimed = true;
+            combatYaw = ctx.mc.thePlayer.rotationYaw;
+            combatPitch = ctx.mc.thePlayer.rotationPitch;
+        }
     }
 
     void perform(
             EntityPlayer target,
+            boolean retreating,
             GuardAssist assist,
             boolean engaged,
             PitRegion pit,
@@ -87,6 +121,7 @@ final class GuardAttack {
         float desired = beforeYaw, pitch = beforePitch;
         boolean rayReady = true, windowReady = true;
         if (target != null) {
+            double reach = CombatClicks.ATTACK_REACH - (retreating ? .12 : 0);
             Vec3Point eye =
                     new Vec3Point(
                             ctx.mc.thePlayer.posX,
@@ -94,10 +129,7 @@ final class GuardAttack {
                             ctx.mc.thePlayer.posZ);
             Vec3Point aim =
                     CombatAim.clearPoint(
-                            eye,
-                            box(target),
-                            CombatClicks.ATTACK_REACH,
-                            hit -> ctx.host.guardRay(eye, hit));
+                            eye, box(target), reach, hit -> ctx.host.guardRay(eye, hit));
             if (aim == null)
                 aim =
                         CombatAim.clearPoint(
@@ -110,19 +142,14 @@ final class GuardAttack {
                                     Math.atan2(
                                             aim.y - eye.y,
                                             Math.sqrt(eye.horizontalDistanceSq(aim))));
-            if (mayTurn && !ctx.navigator.jumpInProgress() && aimedAt != tick)
-                turnToward(
-                        desired,
-                        pitch,
-                        tick,
-                        assist.pending(tick) && ctx.reachable(position(ctx.mc.thePlayer), target));
+            if (mayTurn && !ctx.navigator.jumpInProgress()) turnToward(desired, pitch, tick, true);
             Vec3Point hit =
                     CombatAim.hit(
                             eye,
                             box(target),
                             ctx.mc.thePlayer.rotationYaw,
                             ctx.mc.thePlayer.rotationPitch,
-                            CombatClicks.ATTACK_REACH);
+                            reach);
             rayReady = hit != null && ctx.host.guardRay(eye, hit);
             windowReady = combatWindow.ready(tick, target.hurtTime, ctx.host.guardPingMillis());
         }
@@ -146,6 +173,14 @@ final class GuardAttack {
                 assist.attackSent(tick, ctx.host.guardPingMillis());
             } else airMirrored = true;
         }
+        String gate;
+        if (performed) gate = "none";
+        else if (!pending) gate = "no_pending_swing";
+        else if (!equipmentReady) gate = "equipment";
+        else if (!rayReady) gate = "ray";
+        else if (!windowReady) gate = "hit_window";
+        else if (cooldown > 0) gate = "pacing";
+        else gate = "duplicate_tick";
         ctx.host.recordCombatDecision(
                 target,
                 "guard",
@@ -162,18 +197,6 @@ final class GuardAttack {
                         ? CombatClicks.Action.NONE
                         : action,
                 performed && action == CombatClicks.Action.ATTACK,
-                performed
-                        ? "none"
-                        : !pending
-                                ? "no_pending_swing"
-                                : !equipmentReady
-                                        ? "equipment"
-                                        : !rayReady
-                                                ? "ray"
-                                                : !windowReady
-                                                        ? "hit_window"
-                                                        : cooldown > 0
-                                                                ? "pacing"
-                                                                : "duplicate_tick");
+                gate);
     }
 }

@@ -52,7 +52,7 @@ public final class SprintGapSelfTest {
                 Vec3Point mid=arc.get(3);
                 expect(!SprintGap.continuing(geometry,pit,plan,new Vec3Point(mid.x-dz,mid.y,mid.z+dx),arc.get(4)),"knockback outside the lateral envelope does not authorize continued jump input");
             }
-            GroundRoute route=new GroundRoute(geometry,pit,pit,null,1,true,true);
+            GroundRoute route=new GroundRoute(geometry,pit,pit,null,1,true);
             Node start=new Node(0,2,0),goal=new Node(dx*(width+1),2,dz*(width+1));
             expect(route.traversable(start,goal),"full planner can use a validated sprint-gap edge");
             List<Node> path=new GridPathfinder().find(start,route,new GridPathfinder.Goal() {
@@ -60,8 +60,7 @@ public final class SprintGapSelfTest {
                 public double estimate(Node n) { return Math.abs(n.x-goal.x)+Math.abs(n.z-goal.z); }
             },1000);
             expect(path.size()==2,"short full search finds a complete platform-to-platform gap route");
-            expect(!new GroundRoute(geometry,pit,pit,null,1,false,true).traversable(start,goal),"parkour off blocks the sprint-gap edge");
-            expect(!new GroundRoute(geometry,pit,pit,null,1,true,false).traversable(start,goal),"unmodeled jump effects block the sprint-gap edge");
+            expect(!new GroundRoute(geometry,pit,pit,null,1,false).traversable(start,goal),"unmodeled jump effects block the sprint-gap edge");
         }
         Vec3Point target=new Vec3Point(4.5,1,.5);
         for(int width:new int[]{1,2}) for(int[] direction:new int[][]{{1,0},{-1,0},{0,1},{0,-1}}) {
@@ -82,10 +81,10 @@ public final class SprintGapSelfTest {
             List<Vec3Point> raisedArc=SprintGap.samples(raisedCandidate.takeoff,2,dx,dz,speed,.1274,.026,.546);
             for(int i=1;i<raisedArc.size();i++) expect(SprintGap.continuing(raised,pit,raisedPlan,raisedArc.get(i-1),raisedArc.get(i)),
                 "raised gap continues through actual ascent/descent and landing");
-            GroundRoute raisedRoute=new GroundRoute(raised,pit,pit,null,1,true,true);
+            GroundRoute raisedRoute=new GroundRoute(raised,pit,pit,null,1,true);
             GridPathfinder.Node a=raisedRoute.start(current),b=new GridPathfinder.Node(a.x+dx*(width+1),4,a.z+dz*(width+1));
             expect(raisedRoute.traversable(a,b),"raised gap edge is exposed to the full planner");
-            expect(!new GroundRoute(raised,pit,pit,null,1,false,true).traversable(a,b),"raised gap still requires parkour enabled");
+            expect(!new GroundRoute(raised,pit,pit,null,1,false).traversable(a,b),"unsupported jump physics blocks a raised gap");
         }
         for(int problem=1;problem<=4;problem++) expect(SprintGap.find(roof(3,1,0,problem).cached(),pit,current,target)==null,
             "unloaded/hazard/missing-landing/low-ceiling terrain cannot produce a sprint gap");
@@ -109,7 +108,7 @@ public final class SprintGapSelfTest {
             SprintGap.Candidate shortcut=SprintGap.find(captured.cached(),actual,start,eastGoal);
             expect(shortcut==null || shortcut.landing.y>=start.y-.26,
                 "uphill pursuit must not select the long jump to the floor below the opponent: "+start.serialize());
-            expect(!new GroundRoute(captured.cached(),actual,actual,null,63,true,true).edgeClear(start,eastGoal),
+            expect(!new GroundRoute(captured.cached(),actual,actual,null,63,true).edgeClear(start,eastGoal),
                 "two-block rise across the reported long gap is not a jump edge");
         }
         for(int[] direction:new int[][]{{1,0},{-1,0},{0,1},{0,-1}}) for(double rise:new double[]{-1,0,.5,1,1.5,2}) {
@@ -123,7 +122,7 @@ public final class SprintGapSelfTest {
             }).cached();
             Vec3Point far=new Vec3Point(current.x+dx*6,1+rise,current.z+dz*6);
             expect(SprintGap.find(tooWide,pit,current,far)==null,"five empty blocks cannot produce a normal sprint-gap candidate");
-            expect(!new GroundRoute(tooWide,pit,pit,null,1,true,true).edgeClear(current,far),
+            expect(!new GroundRoute(tooWide,pit,pit,null,1,true).edgeClear(current,far),
                 "routing cannot authorize a five-empty-block gap at any tested landing height");
             if(rise>1) expect(SprintGap.samples(current,far.y,dx,dz,.153,.1274,.02548,.546).isEmpty(),
                 "a raised landing above normal jump height has no vanilla sprint arc");
@@ -137,7 +136,7 @@ public final class SprintGapSelfTest {
             Vec3Point far=new Vec3Point(.5+sx*4,1,.5+sz*4);
             expect(SprintGap.diagonalLanding(diagonalTooFar,pit,current,far)==null,
                 "a diagonal with five-plus blocks of centre distance needs a feasible native arc and cannot bypass the range limit");
-            expect(!new GroundRoute(diagonalTooFar,pit,pit,null,1,true,true).edgeClear(current,far),
+            expect(!new GroundRoute(diagonalTooFar,pit,pit,null,1,true).edgeClear(current,far),
                 "an impossible diagonal cannot be exposed to the pathfinder");
         }
         SprintGap.Candidate late=new SprintGap.Candidate(new Vec3Point(-1.5,69,-83.15),new Vec3Point(-1.5,69,-81.25),

@@ -6,6 +6,7 @@ import static dev.optimus.client.guard.GuardContext.position;
 import dev.optimus.core.geometry.PitRegion;
 import dev.optimus.core.geometry.Vec3Point;
 import dev.optimus.core.guard.GuardFollow;
+import dev.optimus.core.guard.GuardSwingSource;
 import dev.optimus.core.navigation.GroundMotion;
 import java.io.IOException;
 import net.minecraft.entity.player.EntityPlayer;
@@ -144,7 +145,7 @@ final class GuardInputTracker {
             velocity = new Vec3Point(delta.x, velocity.y, delta.z);
             String event = frame.session + ":" + frame.swing;
             if (!relayEvent.isEmpty() && !relayEvent.equals(event))
-                combat.observeSwing(event, frame.victim, pit, tick);
+                combat.observeSwing(event, frame.victim, pit, tick, GuardSwingSource.CLIENT_RELAY);
             relayEvent = event;
         } else {
             boolean newSwing =
@@ -153,7 +154,13 @@ final class GuardInputTracker {
             boolean desktopEcho = desktop != null && desktopInput.echo(tick);
             if (newSwing && (lastRelayTick == Long.MIN_VALUE || tick - lastRelayTick > 6)) {
                 if (desktopEcho && combat.live(tick)) combat.reconcileSwing(pit);
-                else combat.observeSwing("remote:" + (++remoteSwing), "", pit, tick);
+                else
+                    combat.observeSwing(
+                            "remote:" + (++remoteSwing),
+                            "",
+                            pit,
+                            tick,
+                            GuardSwingSource.SERVER_OBSERVED);
             }
         }
         if (desktop != null && !knocked) {

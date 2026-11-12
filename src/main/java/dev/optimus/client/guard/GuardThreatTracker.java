@@ -79,7 +79,10 @@ final class GuardThreatTracker {
             }
             if (swing.positionAt != tick) {
                 Vec3Point now = position(candidate);
-                if (swing.point != null) {
+                // A placement correction is not velocity to extrapolate into the next hit.
+                if (swing.point != null
+                        && now.horizontalDistanceSq(swing.point) <= 9
+                        && Math.abs(now.y - swing.point.y) <= 3) {
                     double elapsed = Math.max(1, tick - swing.positionAt);
                     swing.motion =
                             new Vec3Point(
@@ -88,7 +91,7 @@ final class GuardThreatTracker {
                                     0,
                                     .65 * GuardFollow.clamp((now.z - swing.point.z) / elapsed, .36)
                                             + .35 * swing.motion.z);
-                }
+                } else swing.motion = new Vec3Point(0, 0, 0);
                 swing.point = now;
                 swing.positionAt = tick;
             }
@@ -151,6 +154,13 @@ final class GuardThreatTracker {
                 actual.maxX + x,
                 actual.maxY,
                 actual.maxZ + z);
+    }
+
+    boolean retreating(EntityPlayer target, Vec3Point self) {
+        ThreatSwing sample = threats.get(target);
+        if (sample == null) return false;
+        double dx = target.posX - self.x, dz = target.posZ - self.z;
+        return sample.motion.x * dx + sample.motion.z * dz > .02 * Math.hypot(dx, dz);
     }
 
     boolean damaged(EntityPlayer leader) {

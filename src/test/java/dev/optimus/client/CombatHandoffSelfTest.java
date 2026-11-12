@@ -144,7 +144,7 @@ public final class CombatHandoffSelfTest {
             ClientSettings settings=OptimusMod.settings;PitRegion pit=settings.hypixelPit;
             pit.setCornerA(new Vec3Point(-10,0,-10));pit.setCornerB(new Vec3Point(20,10,20));
             settings.pitLobby="duelslobby9";settings.pitInstance="dynamiclobbyTEST";settings.pitEntrance=new Vec3Point(.5,1,.5);
-            settings.whitelist.add("OfflineRival");settings.combatProfile=CombatProfile.BALANCED;settings.parkourEnabled=true;
+            settings.whitelist.add("OfflineRival");settings.combatProfile=CombatProfile.BALANCED;
             ClientEvents events=new ClientEvents();LobbyNavigator nav=(LobbyNavigator)get(events,"navigator");
             ((Random)get(get(events,"combat"),"random")).setSeed(settings.combatSeed);
             ((CombatTap)get(get(events,"combat"),"combatTap")).seed(settings.combatSeed^0x57415441504cL);
@@ -179,7 +179,7 @@ public final class CombatHandoffSelfTest {
 
             Method fight=CombatController.class.getDeclaredMethod("fight",PitRegion.class,Vec3Point.class);fight.setAccessible(true);
             CombatEquipment equipment=(CombatEquipment)get(get(events,"combat"),"combatEquipment");equipment.ready(player,48);
-            GroundRoute terrain=new GroundRoute(geometry.cached(),pit,pit,null,1,true,true);
+            GroundRoute terrain=new GroundRoute(geometry.cached(),pit,pit,null,1,true);
             // No damage is necessary: a nearby raised target must discard even an
             // opposing retained climb and an active detour before this tick's aim.
             nav.reset();position(player,.5,1,.5,true);position(rival,1.5,2,.5,true);player.rotationYaw=0;
@@ -521,6 +521,22 @@ public final class CombatHandoffSelfTest {
             for(long tick=745;tick<752;tick++) { set(events,"tickNo",tick);fight.invoke(get(events,"combat"),pit,new Vec3Point(.5,1,.5)); }
             expect(controller.attacks>beforeSword,"combat resumes with the selected sword");
             commands.processRemote(player,new String[]{"weapon","fist"});
+
+            // Servers can return a player alive without a health-zero frame or respawn packet.
+            set(events,"enteredPit",true);set(events,"returningAfterRespawn",false);
+            position(player,-12,1,.5,true);openMenu(mc,player,90);
+            int teleportMenus=player.closedMenus;
+            events.onTick(new TickEvent.ClientTickEvent(TickEvent.Phase.START));
+            expect(mc.currentScreen==null && player.closedMenus==teleportMenus+1
+                && (Boolean)get(events,"returningAfterRespawn") && !(Boolean)get(events,"enteredPit"),
+                "alive pit return closes a lobby menu before its screen can pause recovery");
+            openMenu(mc,player,91);events.onTick(new TickEvent.ClientTickEvent(TickEvent.Phase.END));
+            expect(mc.currentScreen==null && player.closedMenus==teleportMenus+2,
+                "alive pit return also closes a menu arriving in the next tick phase");
+            position(player,.5,1,.5,true);events.onTick(new TickEvent.ClientTickEvent(TickEvent.Phase.END));
+            events.onTick(new TickEvent.ClientTickEvent(TickEvent.Phase.START));
+            expect((Boolean)get(events,"enteredPit") && !(Boolean)get(events,"returningAfterRespawn"),
+                "alive return cleanup ends after checked pit re-entry");
 
             // Native queues are independent of bot movement: holding or queueing a
             // click before death used to survive into the lobby's replacement items.

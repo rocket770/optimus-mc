@@ -62,9 +62,9 @@ public final class SpecificPitJumpSelfTest {
             RouteHints hints=RouteHints.load(Files.createTempDirectory("specific-route-hints").toFile());
             expect(hints.jump(RouteHints.node(SpecificPitJump.FROM),RouteHints.node(SpecificPitJump.TO)).kind==SpecificPitJump.KIND,"known map exposes one directed optional built-in edge");
             expect(hints.jump(RouteHints.node(SpecificPitJump.TO),RouteHints.node(SpecificPitJump.FROM))==null,"this routine does not authorize an unproved reverse jump");
-            GroundRoute ground=new GroundRoute(geometry,pit,pit,null,63,true,true);
+            GroundRoute ground=new GroundRoute(geometry,pit,pit,null,63,true);
             expect(hints.augment(ground,geometry,pit,true,k->false).traversable(RouteHints.node(SpecificPitJump.FROM),RouteHints.node(SpecificPitJump.TO)),"mixed planner can choose the specific edge");
-            expect(!hints.augment(ground,geometry,pit,false,k->false).traversable(RouteHints.node(SpecificPitJump.FROM),RouteHints.node(SpecificPitJump.TO)),"parkour-off cannot use the edge");
+            expect(!hints.augment(ground,geometry,pit,false,k->false).traversable(RouteHints.node(SpecificPitJump.FROM),RouteHints.node(SpecificPitJump.TO)),"unsupported jump physics cannot use the edge");
             Method position=method(CapturedNavigationSelfTest.class,"position",pt,Vec3Point.class,float.class),physics=method(pt,"physics",GameSettings.class);
             ClientEvents events=new ClientEvents();LobbySafety safety=(LobbySafety)field(ClientEvents.class,"lobbySafety").get(events);
             TransitionWatch watch=new TransitionWatch(safety,manager);channel=new EmbeddedChannel(watch);set(manager,"channel",channel);

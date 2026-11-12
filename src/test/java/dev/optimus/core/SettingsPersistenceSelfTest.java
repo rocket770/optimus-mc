@@ -28,7 +28,7 @@ public final class SettingsPersistenceSelfTest {
                         + "\ncontrol.operator.Helper_One="
                         + operator
                         + "\ncombat.weapon=fist\ntarget.all=true\ntarget.names=Target_One,Target_Two"
-                        + "\ncombat.profile=paced\ncombat.seed=770\nnavigation.parkour=false\nnavigation.routes.enabled=false"
+                        + "\ncombat.profile=paced\ncombat.seed=770\nnavigation.routes.enabled=false"
                         + "\nguard.name=Guarded_Player\nguard.uuid="
                         + guard
                         + "\nguard.keys=off\nfuture.setting=keep-me"
@@ -57,7 +57,7 @@ public final class SettingsPersistenceSelfTest {
                 settings.combatSeed == 770 && settings.combatProfile.id().equals("paced"),
                 "profile and seed survive loading");
         expect(
-                !settings.parkourEnabled && !settings.routeHintsEnabled,
+                !settings.routeHintsEnabled,
                 "explicit disabled navigation preferences are not replaced by defaults");
         expect(
                 settings.guardName.equals("Guarded_Player")

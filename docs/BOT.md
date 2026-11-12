@@ -16,7 +16,7 @@ The preset is for the [example pit](../examples/pit/README.md). Pair the control
 !o stop
 ```
 
-Useful commands: `target all|listed`, `target clear`, `weapon sword|fist`, `profile balanced|baseline|paced`, `parkour on|off`, `visuals on|off`, and `status`. Use `operator add Name` to grant target, guard, weapon and start/stop control.
+Useful commands: `target all|listed`, `target clear`, `weapon sword|fist`, `profile balanced|baseline|paced`, `visuals on|off`, and `status`. Use `operator add Name` to grant target, guard, weapon and start/stop control.
 
 Local commands use `/o`; chat uses `!o`. `!o @BotName stop` addresses one bot. F8 toggles a run; F9 always stops it. Settings live in `config/optimus.properties`. See [settings](CONFIGURATION.md).
 

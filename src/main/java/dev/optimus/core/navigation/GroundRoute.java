@@ -12,7 +12,7 @@ public final class GroundRoute implements GridPathfinder.Terrain {
     private final PitRegion area, pit;
     private final Vec3Point rim;
     private final double floor;
-    private final boolean parkour, jumpAllowed;
+    private final boolean jumpAllowed;
     private final java.util.function.BiPredicate<Vec3Point, Vec3Point> permitted;
     private final Map<Node, Vec3Point> surfaces = new HashMap<>();
     private final Map<String, Boolean> checkedEdges = new HashMap<>();
@@ -23,9 +23,8 @@ public final class GroundRoute implements GridPathfinder.Terrain {
             PitRegion pit,
             Vec3Point rim,
             double floor,
-            boolean parkour,
             boolean jumpAllowed) {
-        this(geometry, area, pit, rim, floor, parkour, jumpAllowed, (a, b) -> true);
+        this(geometry, area, pit, rim, floor, jumpAllowed, (a, b) -> true);
     }
 
     public GroundRoute(
@@ -34,7 +33,6 @@ public final class GroundRoute implements GridPathfinder.Terrain {
             PitRegion pit,
             Vec3Point rim,
             double floor,
-            boolean parkour,
             boolean jumpAllowed,
             java.util.function.BiPredicate<Vec3Point, Vec3Point> permitted) {
         this.geometry = geometry;
@@ -42,7 +40,6 @@ public final class GroundRoute implements GridPathfinder.Terrain {
         this.pit = pit;
         this.rim = rim;
         this.floor = floor;
-        this.parkour = parkour;
         this.jumpAllowed = jumpAllowed;
         this.permitted = permitted;
     }
@@ -127,13 +124,12 @@ public final class GroundRoute implements GridPathfinder.Terrain {
                     && geometry.walkClear(from, to);
         }
         if (PlatformJump.candidate(from, to)
-                && (!gap(from, to) || parkour)
                 && jumpAllowed
                 && PlatformJump.possible(geometry, area, from, to)) return true;
         if (gap(from, to) && !JumpArc.candidate(from, to) && !SprintGap.candidate(from, to))
             return false;
         if (SprintGap.candidate(from, to)) {
-            if (!parkour || !jumpAllowed) return false;
+            if (!jumpAllowed) return false;
             boolean diagonal = Math.abs(to.x - from.x) > .01 && Math.abs(to.z - from.z) > .01;
             SprintGap.Candidate candidate =
                     diagonal
@@ -144,8 +140,7 @@ public final class GroundRoute implements GridPathfinder.Terrain {
                     && Math.abs(candidate.landing.y - to.y) < .26;
         }
         if (JumpArc.candidate(from, to)) {
-            if (!parkour
-                    || !jumpAllowed
+            if (!jumpAllowed
                     || geometry.supported(
                             new Vec3Point((from.x + to.x) / 2, from.y, (from.z + to.z) / 2), .15))
                 return false;
@@ -212,11 +207,11 @@ public final class GroundRoute implements GridPathfinder.Terrain {
                         Node n = new Node(from.x + dx, from.y2 + height, from.z + dz);
                         Vec3Point landing = point(n);
                         if (landing != null
-                                && (Math.abs(dx) == 1 && Math.abs(dz) == 1
-                                        || parkour && jumpAllowed)) extra.add(n);
+                                && (Math.abs(dx) == 1 && Math.abs(dz) == 1 || jumpAllowed))
+                            extra.add(n);
                     }
                 }
-        if (p != null && parkour && jumpAllowed)
+        if (p != null && jumpAllowed)
             for (int dx = -4; dx <= 4; dx++)
                 for (int dz = -4; dz <= 4; dz++) {
                     if (dx == 0 || dz == 0 || Math.max(Math.abs(dx), Math.abs(dz)) < 3) continue;
@@ -226,7 +221,7 @@ public final class GroundRoute implements GridPathfinder.Terrain {
                         if (point(n) != null) extra.add(n);
                     }
                 }
-        if (parkour && jumpAllowed && p != null)
+        if (jumpAllowed && p != null)
             for (int[] d : dirs)
                 for (int height = -2; height <= 1; height++) {
                     Node n = new Node(from.x + d[0] * 2, from.y2 + height, from.z + d[1] * 2);
@@ -238,7 +233,7 @@ public final class GroundRoute implements GridPathfinder.Terrain {
                                     .15)
                             && gap(p, landing)) extra.add(n);
                 }
-        if (parkour && jumpAllowed && p != null)
+        if (jumpAllowed && p != null)
             for (int[] d : dirs)
                 for (int distance : new int[] {3, 4, 5}) {
                     boolean empty = true;
@@ -256,7 +251,7 @@ public final class GroundRoute implements GridPathfinder.Terrain {
                                             from.y2 + height,
                                             from.z + d[1] * distance));
                 }
-        if (parkour && jumpAllowed && p != null)
+        if (jumpAllowed && p != null)
             for (int[] d : dirs)
                 if (!geometry.supported(new Vec3Point(p.x + d[0], p.y, p.z + d[1]), .15))
                     extra.add(new Node(from.x + d[0] * 2, from.y2 + 2, from.z + d[1] * 2));

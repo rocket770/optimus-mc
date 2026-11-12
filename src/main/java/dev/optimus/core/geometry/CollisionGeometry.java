@@ -5,6 +5,7 @@ import java.util.*;
 
 /** Collision-box geometry shared by the live world adapter and captured-map replay. */
 public final class CollisionGeometry {
+    private static final double CONTACT_EPSILON = .00001;
     // Native 1.8.9 jump apex with the .42f impulse, .08 gravity, .98f
     // vertical drag and .005 motion deadzone. Rounding to 1.25 admits
     // ledges just above the actual apex; native replays cross-check this bound.
@@ -181,6 +182,23 @@ public final class CollisionGeometry {
 
     public boolean standable(PitRegion area, Vec3Point p) {
         return p != null && area.containsBody(p, .3, 1.8) && free(body(p)) && supported(p, .15);
+    }
+
+    /** Actual foot contact includes ledge edges; grid-node standability stays centre-supported. */
+    public boolean touchingGround(PitRegion area, Vec3Point p) {
+        if (p == null || !area.containsBody(p, .3, 1.8) || !free(body(p))) return false;
+        List<Box> support =
+                hits(
+                        new Box(
+                                p.x - .3,
+                                p.y - CONTACT_EPSILON,
+                                p.z - .3,
+                                p.x + .3,
+                                p.y + CONTACT_EPSILON,
+                                p.z + .3));
+        if (support == null) return false;
+        for (Box shape : support) if (Math.abs(shape.maxY - p.y) < CONTACT_EPSILON) return true;
+        return false;
     }
     /** Resolve carpets/snow/stair surfaces rather than forcing feet onto half-block coordinates. */
     public Vec3Point surface(Vec3Point nominal, PitRegion area) {

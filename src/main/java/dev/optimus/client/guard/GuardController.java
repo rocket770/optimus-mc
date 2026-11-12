@@ -211,8 +211,12 @@ public final class GuardController {
         EntityPlayer player = guarded(pit);
         if (player == null) {
             if (!idle.waiting()) suspend();
-            idle.waitForLeader(
-                    pit, tick, candidate -> motion.safeInput(candidate, false, false, pit));
+            idle.waitForLeader(pit, beforeMovement);
+            return;
+        }
+        // Finish a checked patrol flight before handing its movement to following.
+        if (idle.waiting() && ctx.navigator.jumpInProgress()) {
+            idle.waitForLeader(pit, beforeMovement);
             return;
         }
         idle.returned();

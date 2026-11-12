@@ -23,7 +23,6 @@ public final class RemoteCommand {
                             "status",
                             "help",
                             "profile",
-                            "parkour",
                             "seed",
                             "weapon",
                             "operator",

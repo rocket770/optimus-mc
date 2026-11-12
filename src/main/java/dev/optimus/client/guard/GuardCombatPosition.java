@@ -10,6 +10,10 @@ import net.minecraft.entity.player.EntityPlayer;
 
 /** Chooses checked guard combat positions without crossing the guarded player's view. */
 final class GuardCombatPosition {
+    // Keep the approach inside the existing 1.8-block leader tether.
+    private static final double[] APPROACH_OFFSETS = {
+        -.08, .16, .38, .60, .82, 1.04, 1.26, 1.48, 1.70
+    };
     private final GuardContext ctx;
     private final GuardThreatTracker threats;
     private int combatSide;
@@ -49,9 +53,7 @@ final class GuardCombatPosition {
             Vec3Point self,
             Vec3Point pose,
             Vec3Point ordinary,
-            float yaw,
-            PitRegion pit,
-            long tick) {
+            PitRegion pit) {
         if (!engaged
                 || !ctx.mc.thePlayer.onGround
                 || !leader.onGround
@@ -73,7 +75,7 @@ final class GuardCombatPosition {
             else fightingPost = null;
         }
         fightingOwner = pose;
-        yaw = heading(pose, assistTarget);
+        float yaw = heading(pose, assistTarget);
         ordinary = GuardFollow.anchor(pose, yaw);
         Vec3Point ownerEye =
                 new Vec3Point(
@@ -117,7 +119,7 @@ final class GuardCombatPosition {
                     new int[] {
                         combatSide == 0 ? 1 : combatSide, combatSide == 0 ? -1 : -combatSide
                     })
-                for (double advance : new double[] {-.08, .16, .38, .60}) {
+                for (double advance : APPROACH_OFFSETS) {
                     Vec3Point candidate =
                             new Vec3Point(
                                     pose.x + fx * advance + fz * .42 * sign,

@@ -32,6 +32,10 @@ public interface GuardHost {
 
     void guardHold();
 
+    void guardRoam(PitRegion pit);
+
+    void guardCancelRoam();
+
     void guardNavigate(Vec3Point goal, PitRegion pit, boolean precise, boolean travelJump);
 
     boolean guardTravelJump(Vec3Point goal, PitRegion pit);

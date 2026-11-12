@@ -270,12 +270,14 @@ public final class CapturedNavigationSelfTest {
         Method apply=ClientEvents.class.getDeclaredMethod("navigateStep",Vec3Point.class,PitRegion.class,LobbyNavigator.Step.class);apply.setAccessible(true);
         Method release=ClientEvents.class.getDeclaredMethod("releaseKeys");release.setAccessible(true);
         List<String> failures=new ArrayList<>();int scenario=0;
+        for(boolean descending:new boolean[]{false,true})
         for(int[] direction:new int[][]{{1,0},{-1,0},{0,1},{0,-1}}) for(int heading=0;heading<4;heading++) {
-            Vec3Point start=new Vec3Point(.5,63,-104.5),goal=new Vec3Point(.5+direction[0]*7,67,-104.5+direction[1]*7);
+            Vec3Point low=new Vec3Point(.5,63,-104.5),high=new Vec3Point(.5+direction[0]*7,67,-104.5+direction[1]*7);
+            Vec3Point start=descending?high:low,goal=descending?low:high;
             set(nav,"geometry",world.stairs(direction[0],direction[1]));nav.reset();release.invoke(events);
             ((CombatFocus<?>)get(get(events,"combat"),"combatFocus")).reset();position(player,start,heading*90);
             if(rival!=null) position(rival,goal,0);
-            String name="stair_sprint_"+(scenario++);int before=controller.attacks,ascentSprint=0,elapsed=0;boolean arrived=false;
+            String name=(descending?"stair_descent_":"stair_ascent_")+(scenario++);int before=controller.attacks,ascentSprint=0,elapsed=0;boolean arrived=false;
             for(int tick=1;tick<=180;tick++) {
                 elapsed=tick;long now=System.nanoTime()/1000000L;safety.request("mc.hypixel.net",world,now);
                 if(!safety.confirm("mc.hypixel.net",world,now,"DUELS","duelslobby9","dynamiclobbyTEST",false)) throw new AssertionError("stair fixture verification");
@@ -292,13 +294,15 @@ public final class CapturedNavigationSelfTest {
             }
             // A backwards initial view needs time to turn before W can sprint;
             // it must still sustain forward sprint during the remaining ascent.
-            boolean valid=arrived && player.jumps==0 && ascentSprint>=6;
+            boolean valid=arrived && player.jumps==0
+                    && ascentSprint>=(descending && rival!=null?1:6)
+                    && (!descending || rival!=null || elapsed<=40);
             if(!valid) failures.add(name);
             System.out.println(name+": "+(valid?"PASS":"FAILED")+" ascentSprint="+ascentSprint+" jumps="+player.jumps+" ticks="+elapsed+" end="+point(player).serialize());
             summary.add(name+","+start.x+","+start.y+","+start.z+","+goal.x+","+goal.y+","+goal.z+","+(valid?"ARRIVED":"FAILED")+","+elapsed+","+player.jumps+","+ascentSprint+",0,0");
         }
         if(!failures.isEmpty()) throw new AssertionError("Native stair sprint scenarios failed: "+failures);
-        System.out.println("PASS: native stair sprint replay across four directions and four camera headings");
+        System.out.println("PASS: native ascent/descent across four directions and four camera headings");
     }
     private static void hintReplays(ClientEvents events,Player rival,List<String> rows,List<String> summary) throws Exception {
         Minecraft mc=Minecraft.getMinecraft();Player player=(Player)mc.thePlayer;World world=(World)mc.theWorld;
@@ -309,10 +313,11 @@ public final class CapturedNavigationSelfTest {
         Method fight=CombatController.class.getDeclaredMethod("fight",PitRegion.class,Vec3Point.class);fight.setAccessible(true);
         RouteHints previous=OptimusMod.routeHints;boolean previousEnabled=OptimusMod.routeHintsEnabled;
         OptimusMod.routeHints=Boolean.getBoolean("optimus.bundledHints")?RouteHints.load(Files.createTempDirectory("optimus-bundled-hints").toFile()):RouteHintsSelfTest.replayHints();OptimusMod.routeHintsEnabled=true;
-        String[] names={"east_precision","main_precision","main_precision_return","west_momentum","east_ledge","east_ledge_return","ledge_to_jump","jump_to_ledge","floor_crossing"};
+        String[] names={"east_precision","main_precision","main_precision_return","west_momentum","east_ledge","east_ledge_return","ledge_to_jump","jump_to_ledge","floor_crossing","long_hint_offset"};
         double[][] cases={{21.5,65,-111.5,23.5,66,-107.5},{2.5,69,-106.5,5.5,70,-102.5},{5.5,70,-102.5,2.5,69,-106.5},
             {-19.5,67.5,-100.5,-21.5,66.5,-106.5},{16.5,68.5,-96.5,20.5,68,-97.5},{20.5,68,-97.5,16.5,68.5,-96.5},
-            {20.5,68,-97.5,23.5,66,-107.5},{23.5,66,-107.5,20.5,68,-97.5},{-14.5,63,-116.5,20.5,63,-115.5}};
+            {20.5,68,-97.5,23.5,66,-107.5},{23.5,66,-107.5,20.5,68,-97.5},{-14.5,63,-116.5,20.5,63,-115.5},
+            {1.499,63,-119.502,20.5,63,-115.5}};
         List<String> failures=new ArrayList<>();
         try {
             for(int c=0;c<cases.length;c++) for(int facing=0;facing<6;facing++) {
@@ -347,7 +352,7 @@ public final class CapturedNavigationSelfTest {
                 summary.add(name+","+start.x+","+start.y+","+start.z+","+goal.x+","+goal.y+","+goal.z+","+(valid?"ARRIVED":"FAILED")+","+elapsed+","+player.jumps+",0,0,0");
             }
             if(!failures.isEmpty()) throw new AssertionError("Runtime hint routes failed: "+failures);
-            System.out.println("PASS: 54 native runtime hint navigation cases"+(rival==null?"":" with combat and eligible attacks"));
+            System.out.println("PASS: "+(cases.length*6)+" native runtime hint navigation cases"+(rival==null?"":" with combat and eligible attacks"));
             if(rival!=null) hintInterruptions(events,rival);
         } finally { release.invoke(events);OptimusMod.routeHints=previous;OptimusMod.routeHintsEnabled=previousEnabled; }
     }
@@ -522,7 +527,7 @@ public final class CapturedNavigationSelfTest {
             set(nav,"geometry",((World)mc.theWorld).platforms(63,63,0,0));
             for(double speed:new double[]{.153,.16,.17,.19}) {
                 nav.reset();release.invoke(events);position(player,original,-90);player.sprint=true;player.motionX=speed;player.jumpMovementFactor=.026f;
-                GroundRoute ground=new GroundRoute(((CollisionGeometry)get(nav,"geometry")).cached(),pit,pit,null,63,true,true);
+                GroundRoute ground=new GroundRoute(((CollisionGeometry)get(nav,"geometry")).cached(),pit,pit,null,63,true);
                 set(nav,"plannedTerrain",ground);set(nav,"path",Arrays.asList(RouteHints.node(original),RouteHints.node(new Vec3Point(8.5,63,-100.5))));
                 set(nav,"index",1);set(nav,"hintedPath",true);set(nav,"pathHints",OptimusMod.routeHints);set(nav,"plannedGoal",goal);set(nav,"targetMode",true);
                 boolean landed=false;
@@ -592,7 +597,7 @@ public final class CapturedNavigationSelfTest {
             ClientSettings settings=OptimusMod.settings;PitRegion pit=settings.hypixelPit;
             pit.setCornerA(new Vec3Point(-25,62.5,-127));pit.setCornerB(new Vec3Point(25,78,-77));
             settings.pitLobby="duelslobby9";settings.pitInstance="dynamiclobbyTEST";
-            settings.pitEntrance=new Vec3Point(-1.5,69,-79.5);settings.parkourEnabled=true;
+            settings.pitEntrance=new Vec3Point(-1.5,69,-79.5);
             ClientEvents events=new ClientEvents();LobbyNavigator nav=(LobbyNavigator)get(events,"navigator");
             Player rival=null;
             if(fighting) {
@@ -703,7 +708,6 @@ public final class CapturedNavigationSelfTest {
                     if(c<16) set(nav,"geometry",world.platforms(63,63,0,0));
                     else { world.load(fixture);set(nav,"geometry",CollisionReplaySelfTest.capture(fixture)); }
                 }
-                settings.parkourEnabled=!slabAndDrop || c<3;
                 nav.reset();release.invoke(events);position(player,start,steering?c<16?(c%8)*45:15+(c%4)*90:reportedJumps || wasd || reportedPost || reportedLongGap || fighting || simpleClimbs?(c%4)*90:c>=12?(c-11)*90:0);boolean arrived=false;
                 if(rival!=null) { position(rival,goal,0);((CombatFocus<?>)get(get(events,"combat"),"combatFocus")).reset(); }
                 if(steering && c>=16) { player.motionX=.08;player.motionZ=.04; }
@@ -760,8 +764,8 @@ public final class CapturedNavigationSelfTest {
             if(slabAndDrop) {
                 CollisionGeometry g=world.platforms(70,63,0,0);Vec3Point from=new Vec3Point(.5,70,-100.5),to=new Vec3Point(1.5,63,-100.5);
                 PitRegion elsewhere=new PitRegion();elsewhere.setCornerA(new Vec3Point(14,62.5,-127));elsewhere.setCornerB(new Vec3Point(25,78,-77));
-                if(!new GroundRoute(g,pit,pit,null,63,false,false).drop(from,to)) throw new AssertionError("authorized pit drop is independent of parkour/jump capability");
-                if(new GroundRoute(g,pit,elsewhere,null,63,false,false).edgeClear(from,to)) throw new AssertionError("deep outside-pit descent cannot inherit damage-free pit policy");
+                if(!new GroundRoute(g,pit,pit,null,63,false).drop(from,to)) throw new AssertionError("authorized pit drop is independent of parkour/jump capability");
+                if(new GroundRoute(g,pit,elsewhere,null,63,false).edgeClear(from,to)) throw new AssertionError("deep outside-pit descent cannot inherit damage-free pit policy");
                 if(g.walkOffClear(from,new Vec3Point(4.5,63,-100.5),pit)) throw new AssertionError("walking off a ledge cannot authorize a distant gap");
                 if(g.walkOffClear(from,new Vec3Point(1.5,64,-100.5),pit)) throw new AssertionError("drop needs an actually supported landing");
             }

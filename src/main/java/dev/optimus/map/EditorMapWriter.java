@@ -24,7 +24,7 @@ public final class EditorMapWriter {
             throws IOException {
         CollisionGeometry geometry = capture.geometry();
         PitRegion area = capture.area();
-        GroundRoute route = new GroundRoute(geometry, area, new PitRegion(), null, 0, true, true);
+        GroundRoute route = new GroundRoute(geometry, area, new PitRegion(), null, 0, true);
         List<Vec3Point> points = new ArrayList<>();
         Map<String, List<Integer>> columns = new HashMap<>();
         Set<String> unique = new HashSet<>();

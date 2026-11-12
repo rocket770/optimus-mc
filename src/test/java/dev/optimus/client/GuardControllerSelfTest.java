@@ -11,6 +11,7 @@ import dev.optimus.core.geometry.PitRegion;
 import dev.optimus.core.geometry.Vec3Point;
 import dev.optimus.core.guard.GuardAssist;
 import dev.optimus.core.guard.GuardFollow;
+import dev.optimus.core.guard.GuardSwingSource;
 import dev.optimus.core.navigation.NearbySteering;
 import dev.optimus.core.navigation.SprintGap;
 import dev.optimus.core.safety.LobbySafety;
@@ -58,12 +59,12 @@ public final class GuardControllerSelfTest {
     }
 
     private static void set(Object object, String name, Object value) throws Exception {
-        if (object instanceof GuardController) object=GuardTestInputs.owner(object,name);
+        if (object instanceof GuardController) object = GuardTestInputs.owner(object, name);
         field(object.getClass(), name).set(object, value);
     }
 
     private static Object get(Object object, String name) throws Exception {
-        if (object instanceof GuardController) object=GuardTestInputs.owner(object,name);
+        if (object instanceof GuardController) object = GuardTestInputs.owner(object, name);
         return field(object.getClass(), name).get(object);
     }
 
@@ -215,10 +216,23 @@ public final class GuardControllerSelfTest {
             GuardController guard, Player leader, Player rival, PitRegion pit, long tick)
             throws Exception {
         Method observe =
-                get(guard,"combat").getClass().getDeclaredMethod(
-                        "observeSwing", String.class, String.class, PitRegion.class, long.class);
+                get(guard, "combat")
+                        .getClass()
+                        .getDeclaredMethod(
+                                "observeSwing",
+                                String.class,
+                                String.class,
+                                PitRegion.class,
+                                long.class,
+                                GuardSwingSource.class);
         observe.setAccessible(true);
-        observe.invoke(get(guard,"combat"), "swing-" + tick, rival == null ? "" : rival.id.toString(), pit, tick);
+        observe.invoke(
+                get(guard, "combat"),
+                "swing-" + tick,
+                rival == null ? "" : rival.id.toString(),
+                pit,
+                tick,
+                GuardSwingSource.SERVER_OBSERVED);
     }
 
     private static void step(ClientEvents events, GuardController guard, PitRegion pit, long tick)
@@ -316,6 +330,7 @@ public final class GuardControllerSelfTest {
             settings.pitInstance = "dynamiclobbyTEST";
             settings.pitEntrance = new Vec3Point(0, 1, 0);
             ClientEvents events = new ClientEvents();
+            ((Random) get(events, "patrolRandom")).setSeed(731);
             guard = (GuardController) get(events, "guard");
             set(guard, "listening", true);
             set(events, "locationRoundTrip", 250);
@@ -505,8 +520,6 @@ public final class GuardControllerSelfTest {
                         {"guard", leader.name},
                         {"profile", "paced"},
                         {"profile", "balanced"},
-                        {"parkour", "off"},
-                        {"parkour", "on"},
                         {"seed", "123"},
                         {"routes", "off"},
                         {"routes", "on"}
@@ -622,6 +635,7 @@ public final class GuardControllerSelfTest {
                     "sword held by leader restores bot sword");
             step(events, guard, pit, 26);
             clicks.defer(26, 1);
+            attacks = controller.attacks;
             wall = true;
             swing(guard, leader, rival, pit, 27);
             for (long tick = 27; tick < 32; tick++) step(events, guard, pit, tick);
@@ -648,14 +662,20 @@ public final class GuardControllerSelfTest {
             swing(guard, leader, null, pit, 35);
             step(events, guard, pit, 35);
             expect(
-                    bot.swings == beforeUnresolvedAir + 1 && controller.attacks == attacks,
-                    "unresolved guard swing is animation only without an entity attack");
-            position(leader, 30, 0);
-            step(events, guard, pit, 35);
+                    bot.swings == beforeUnresolvedAir && controller.attacks == attacks,
+                    "an unresolved click waits for target packets instead of immediately swinging into air");
+            for (long tick = 36; tick <= 43; tick++) step(events, guard, pit, tick);
             expect(
-                    !mc.gameSettings.keyBindForward.isKeyDown()
-                            && !((GuardAssist) get(guard, "assist")).pending(35),
-                    "missing/outside guard target cancels pending assist and releases keys");
+                    bot.swings == beforeUnresolvedAir + 1 && controller.attacks == attacks,
+                    "a genuinely unresolved swing keeps one delayed animation without an entity attack");
+            position(leader, 30, 0);
+            step(events, guard, pit, 43);
+            expect(
+                    (boolean) get(guard, "waiting")
+                            && get(guard, "assistTarget") == null
+                            && !((GuardAssist) get(guard, "assist")).pending(43)
+                            && controller.attacks == attacks,
+                    "missing/outside guard target cancels combat before waiting patrol takes over");
             position(leader, 0, 0);
             position(bot, 0, -GuardFollow.OFFSET);
             position(rival, 8, 0);
@@ -723,47 +743,53 @@ public final class GuardControllerSelfTest {
             position(bot, 0, -GuardFollow.OFFSET);
             position(leader, 30, 0);
             bot.rotationYaw = 0;
+            bot.motionX = bot.motionZ = 0;
+            ((Random) get(events, "patrolRandom")).setSeed(731);
+            bot.onGround = false;
+            bot.motionY = 0;
+            mc.inGameHasFocus = false;
+            net.minecraft.client.settings.KeyBinding.unPressAllKeys();
             int waitingAttacks = controller.attacks;
             step(events, guard, pit, 660);
-            step(events, guard, pit, 1259);
             expect(
-                    !mc.gameSettings.keyBindJump.isKeyDown()
-                            && !mc.gameSettings.keyBindForward.isKeyDown(),
-                    "absent leader waits thirty seconds before idle movement");
-            step(events, guard, pit, 1260);
+                    get(events, "roamGoal") != null && (boolean) get(guard, "waiting"),
+                    "absent leader starts the shared random patrol without a thirty-second delay");
             expect(
-                    mc.gameSettings.keyBindJump.isKeyDown()
-                            && mc.gameSettings.keyBindForward.isKeyDown(),
-                    "absent leader gets a checked jump and small movement after thirty seconds");
-            position(bot, 0, -GuardFollow.OFFSET + .12);
-            step(events, guard, pit, 1263);
+                    !bot.onGround,
+                    "unfocused patrol selection does not manufacture a native landing");
+            bot.onGround = true;
+            boolean walking = false;
+            for (long tick = 661; tick <= 675; tick++) {
+                step(events, guard, pit, tick);
+                walking |=
+                        ((MovementInput) get(events, "input")).snapshot().direction
+                                != NearbySteering.Input.NONE;
+            }
             expect(
-                    mc.gameSettings.keyBindBack.isKeyDown(),
-                    "absent guard returns toward its waiting post after the short movement");
-            position(bot, 0, -GuardFollow.OFFSET);
-            step(events, guard, pit, 1269);
-            expect(
-                    !mc.gameSettings.keyBindJump.isKeyDown()
-                            && !mc.gameSettings.keyBindForward.isKeyDown()
-                            && !mc.gameSettings.keyBindBack.isKeyDown()
-                            && controller.attacks == waitingAttacks,
-                    "waiting guard settles at its post without stale combat");
-            step(events, guard, pit, 1860);
-            expect(
-                    mc.gameSettings.keyBindJump.isKeyDown(),
-                    "absent guard repeats its idle routine without resetting the timer each tick");
+                    walking && controller.attacks == waitingAttacks,
+                    "waiting patrol issues real movement without acquiring combat targets");
             position(leader, 0, 0);
-            step(events, guard, pit, 1861);
+            step(events, guard, pit, 676);
             expect(
-                    get(guard, "waitingPost") == null && get(guard, "leader") == leader,
-                    "returning leader immediately resumes following and clears the waiting routine");
+                    !(boolean) get(guard, "waiting")
+                            && get(events, "roamGoal") == null
+                            && get(guard, "leader") == leader,
+                    "returning leader cancels the patrol and immediately resumes following");
             position(leader, 30, 0);
             step(events, guard, pit, 1900);
             guard.suspend();
+            expect(
+                    !(boolean) get(guard, "waiting")
+                            && get(events, "roamGoal") == null
+                            && ((MovementInput) get(events, "input")).snapshot().direction
+                                    == NearbySteering.Input.NONE,
+                    "suspension cancels patrol ownership and held movement");
+            mc.currentScreen = new net.minecraft.client.gui.GuiChat();
             step(events, guard, pit, 1901);
             expect(
-                    !mc.gameSettings.keyBindJump.isKeyDown(),
-                    "menu suspension resets the absent leader idle timer");
+                    get(events, "roamGoal") == null && !(boolean) get(guard, "waiting"),
+                    "an open menu cannot restart waiting patrol movement");
+            mc.currentScreen = null;
             position(leader, 0, 0);
             guard.reset();
             step(events, guard, pit, 650);
@@ -1025,13 +1051,17 @@ public final class GuardControllerSelfTest {
             rival.swingProgressInt = 0;
             int beforeSwitch = controller.attacks;
             clicks.defer(958, 1);
-            for (long tick = 958; tick <= 962; tick++) step(events, guard, pit, tick);
+            for (long tick = 958; tick <= 959; tick++) step(events, guard, pit, tick);
+            expect(
+                    get(guard, "assistTarget") == second && controller.attacks == beforeSwitch,
+                    "a fresh swing switches the locked opponent while awaiting the owner's hit feedback");
+            for (long tick = 960; tick <= 962; tick++) step(events, guard, pit, tick);
             expect(
                     get(guard, "assistTarget") == second
                             && controller.attacks > beforeSwitch
                             && controller.last == second
                             && second.getHealth() == 20,
-                    "a fresh observed swing switches the locked opponent and sends an attack without waiting for owner damage");
+                    "an unanswered owner swing still permits an attack after the bounded feedback wait");
             position(second, 0, 3.4);
             position(bot, 0, -GuardFollow.OFFSET);
             bot.rotationYaw = 180;
@@ -1042,38 +1072,40 @@ public final class GuardControllerSelfTest {
                     Math.abs(CombatTurn.wrap(bot.rotationYaw)) < 180,
                     "combat aims toward an out-of-reach opponent instead of keeping the owner's unrelated heading");
             Method combatGoal =
-                    get(guard,"combat").getClass().getDeclaredMethod(
-                            "goal",
-                            Vec3Point.class,
-                            Vec3Point.class,
-                            Vec3Point.class,
-                            float.class,
-                            PitRegion.class,
-                            long.class, Vec3Point.class);
+                    get(guard, "combat")
+                            .getClass()
+                            .getDeclaredMethod(
+                                    "goal",
+                                    Vec3Point.class,
+                                    Vec3Point.class,
+                                    Vec3Point.class,
+                                    PitRegion.class,
+                                    long.class,
+                                    Vec3Point.class);
             combatGoal.setAccessible(true);
             Vec3Point self = new Vec3Point(bot.posX, bot.posY, bot.posZ),
                     owner = new Vec3Point(0, 1, 0);
             Vec3Point firstGoal =
                     (Vec3Point)
                             combatGoal.invoke(
-                                    get(guard,"combat"),
+                                    get(guard, "combat"),
                                     self,
                                     owner,
                                     GuardFollow.anchor(owner, 90),
-                                    90f,
                                     pit,
-                                    970L, new Vec3Point(0,0,0));
+                                    970L,
+                                    new Vec3Point(0, 0, 0));
             rival.rotationYawHead = -90;
             Vec3Point nextGoal =
                     (Vec3Point)
                             combatGoal.invoke(
-                                    get(guard,"combat"),
+                                    get(guard, "combat"),
                                     self,
                                     owner,
                                     GuardFollow.anchor(owner, -90),
-                                    -90f,
                                     pit,
-                                    970L, new Vec3Point(0,0,0));
+                                    970L,
+                                    new Vec3Point(0, 0, 0));
             expect(
                     firstGoal.horizontalDistanceSq(nextGoal) < .001,
                     "combat positioning is stable when the guarded player looks away in opposite directions");
@@ -1135,6 +1167,71 @@ public final class GuardControllerSelfTest {
             expect(
                     travel.x > bot.posX + .5,
                     "combat-relative navigation keys retain the route's eastward direction");
+            String previousKeys = settings.guardKeys;
+            settings.guardKeys = "off";
+            long routeTick = 5000;
+            for (int distance : new int[] {6, 12})
+                for (float head : new float[] {-90, 90, 180})
+                    for (boolean identified : new boolean[] {false, true}) {
+                        guard.suspend();
+                        set(guard, "listening", true);
+                        position(bot, 0, 0);
+                        position(leader, 0, distance);
+                        position(rival, 1, distance + 1.5);
+                        bot.motionX = bot.motionZ = 0;
+                        bot.rotationYaw = 90;
+                        leader.rotationYawHead = leader.rotationYaw = head;
+                        leader.hurtTime = rival.hurtTime = 0;
+                        step(events, guard, pit, routeTick++);
+                        swing(guard, leader, identified ? rival : null, pit, routeTick);
+                        for (int phase = 0; phase < 3; phase++) {
+                            float before = bot.rotationYaw;
+                            guard.step(pit, routeTick, true);
+                            expect(
+                                    Math.abs(CombatTurn.wrap(bot.rotationYaw - before)) <= 12.01,
+                                    "distant swing cannot take navigation aim before movement");
+                            before = bot.rotationYaw;
+                            step(events, guard, pit, routeTick++);
+                            expect(
+                                    Math.abs(CombatTurn.wrap(bot.rotationYaw - before)) <= 12.01,
+                                    "distant swing cannot snap navigation aim after movement");
+                            NearbySteering.Input held =
+                                    ((MovementInput) get(events, "input")).snapshot().direction;
+                            if (held != NearbySteering.Input.NONE)
+                                expect(
+                                        held.point(positionPoint(bot), bot.rotationYaw, 1).z
+                                                > bot.posZ + .5,
+                                        "distant combat intent preserves movement toward the guarded player");
+                        }
+                    }
+            settings.guardKeys = previousKeys;
+            guard.suspend();
+            position(bot, 0, 0);
+            bot.motionX = bot.motionZ = 0;
+            bot.rotationYaw = 0;
+            navigator.reset();
+            checks +=
+                    dev.optimus.client.guard.GuardSteeringChecks.verify(
+                            mc,
+                            (dev.optimus.client.guard.GuardHost) get(events, "guardHost"),
+                            settings,
+                            leader,
+                            pit);
+            NavigationController navigation = (NavigationController) get(events, "navigation");
+            Vec3Point cornerGoal = new Vec3Point(6, 1, 0);
+            LobbyNavigator.Step corner =
+                    new LobbyNavigator.Step(
+                            LobbyNavigator.Status.MOVING, positionPoint(bot), false);
+            for (long tick = 6000; tick <= 6011; tick++) {
+                set(events, "tickNo", tick);
+                navigation.navigateStep(
+                        cornerGoal, pit, corner, (CombatController) get(events, "combat"));
+            }
+            LobbyNavigator.Step escape = navigator.step(cornerGoal, pit, false, 6012);
+            expect(
+                    escape.input != null && escape.input.forward < 0,
+                    "a motionless corner correction triggers a checked back-out instead of looping");
+            navigator.reset();
             CollisionGeometry stepDown =
                     new CollisionGeometry(
                             (x, y, z) ->
@@ -1185,11 +1282,12 @@ public final class GuardControllerSelfTest {
             set(guard, "listening", true);
             step(events, guard, pit, 1060);
             Method nominate =
-                    get(guard,"combat").getClass().getDeclaredMethod(
-                            "findVictim", String.class, PitRegion.class);
+                    get(guard, "combat")
+                            .getClass()
+                            .getDeclaredMethod("findVictim", String.class, PitRegion.class);
             nominate.setAccessible(true);
             expect(
-                    nominate.invoke(get(guard,"combat"), "", pit) == rival,
+                    nominate.invoke(get(guard, "combat"), "", pit) == rival,
                     "near-miss owner ray can nominate a real opponent despite small packet misalignment");
             guard.suspend();
             set(guard, "listening", true);
@@ -1255,6 +1353,17 @@ public final class GuardControllerSelfTest {
             bot.sprint = true;
             bot.jumpMovementFactor = .026f;
             leader.isSwingInProgress = false;
+            bot.sprint = false;
+            GuardBridge host = (GuardBridge) get(events, "guardHost");
+            host.guardNavigate(new Vec3Point(.5, 1, 8.5), pit, false, true);
+            expect(
+                    ((List<?>) get(navigator, "path")).isEmpty()
+                            && get(navigator, "search") == null
+                            && mc.gameSettings.keyBindForward.isKeyDown()
+                            && mc.gameSettings.keyBindSprint.isKeyDown(),
+                    "checked clear-ground catch-up starts sprinting without a path search");
+            host.guardHold();
+            bot.sprint = true;
             step(events, guard, pit, 1100);
             position(leader, .5, 3.78);
             step(events, guard, pit, 1101);
@@ -1277,11 +1386,64 @@ public final class GuardControllerSelfTest {
                     Math.abs(bot.motionZ - .153) < 1e-9 && bot.motionY == .2,
                     "combat handoff preserves ordinary airborne velocity");
             navigator.reset();
-            settings.parkourEnabled = false;
+            guard.suspend();
+            position(bot, 0, -GuardFollow.OFFSET);
+            position(leader, 0, 0);
+            position(rival, 0, 2.2);
+            bot.motionX = bot.motionZ = 0;
+            bot.rotationYaw = leader.rotationYawHead = 0;
+            leader.isSwingInProgress = false;
+            for (long tick = 1200; tick <= 1203; tick++) step(events, guard, pit, tick);
+            int beforeRetreat = controller.attacks;
+            position(rival, 0, 2.6);
+            swing(guard, leader, rival, pit, 1204);
+            step(events, guard, pit, 1204);
             expect(
-                    !((GuardBridge) get(events, "guardHost")).guardTravelJump(forecast, pit),
-                    "parkour off also disables the new catch-up jumps");
-            settings.parkourEnabled = true;
+                    controller.attacks == beforeRetreat && get(guard, "assistTarget") == rival,
+                    "a selected victim is approached before spending an attack at the edge of reach");
+            position(bot, 0, 1.2);
+            for (long tick = 1205; tick <= 1211; tick++) step(events, guard, pit, tick);
+            expect(
+                    controller.attacks > beforeRetreat,
+                    "the pending assist attacks after closing into contact reach");
+            float assistedYaw = bot.rotationYaw;
+            int assistedAttacks = controller.attacks;
+            bot.rotationYaw += 90;
+            step(events, guard, pit, 1211);
+            expect(
+                    Math.abs(dev.optimus.core.combat.CombatTurn.wrap(bot.rotationYaw - assistedYaw))
+                            < .01,
+                    "combat aim is restored after navigation changes view in the same physical tick");
+            expect(
+                    controller.attacks == assistedAttacks,
+                    "restoring combat aim cannot duplicate a physical-tick attack");
+            position(second, 0, 1.5);
+            if (!mc.theWorld.playerEntities.contains(second))
+                mc.theWorld.playerEntities.add(second);
+            leader.rotationYawHead = 0;
+            step(events, guard, pit, 1212);
+            step(events, guard, pit, 1213);
+            expect(
+                    get(guard, "assistTarget") == rival,
+                    "an explicit hit victim stays locked when a bystander crosses the guarded player's view");
+            leader.rotationYawHead = 180;
+            swing(guard, leader, null, pit, 1214);
+            guard.step(pit, 1214, true);
+            expect(
+                    get(guard, "assistTarget") == rival
+                            && Math.abs(CombatTurn.wrap(bot.rotationYaw)) < 45,
+                    "combat target and aim survive the pre-movement phase of an unresolved swing");
+            int beforeAimRefresh = controller.attacks;
+            step(events, guard, pit, 1214);
+            expect(
+                    controller.attacks == beforeAimRefresh,
+                    "reasserting combat aim cannot duplicate a physical-tick attack");
+            expect(
+                    get(guard, "assistTarget") == rival,
+                    "an unresolved swing during an active fight retains the opponent");
+            expect(
+                    Math.abs(CombatTurn.wrap(bot.rotationYaw)) < 45,
+                    "an unresolved swing cannot replace combat aim with the guarded player's backward view");
             safety.invalidate();
             step(events, guard, pit, 1080);
             expect(
@@ -1300,7 +1462,6 @@ public final class GuardControllerSelfTest {
                     new String[][] {
                         {"guard", "off"},
                         {"profile", "balanced"},
-                        {"parkour", "on"},
                         {"seed", "770"},
                         {"routes", "off"}
                     }) {
@@ -1320,7 +1481,8 @@ public final class GuardControllerSelfTest {
                     "F9 also blocks a terminal guard command that would start a stopped bot");
             set(guard, "localSwingId", 37L);
             guard.reset();
-            expect((long)get(guard, "localSwingId") == 37L,
+            expect(
+                    (long) get(guard, "localSwingId") == 37L,
                     "reset preserves the publisher's swing sequence for existing subscribers");
         } finally {
             if (logging != null) logging.close();

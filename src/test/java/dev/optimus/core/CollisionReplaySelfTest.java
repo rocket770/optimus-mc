@@ -48,7 +48,7 @@ public final class CollisionReplaySelfTest {
     }
     private static PitRegion pit() { PitRegion p=new PitRegion();p.setCornerA(new Vec3Point(-25,62.5,-127));p.setCornerB(new Vec3Point(25,78,-77));return p; }
     private static GroundRoute terrain(CollisionGeometry geometry,PitRegion area) {
-        return new GroundRoute(geometry.cached(),area,pit(),new Vec3Point(-2,78,-78),63,true,true);
+        return new GroundRoute(geometry.cached(),area,pit(),new Vec3Point(-2,78,-78),63,true);
     }
     private static List<Node> route(CollisionGeometry geometry,Vec3Point from,Vec3Point to,PitRegion area) {
         GroundRoute route=terrain(geometry,area); Node start=route.start(from);

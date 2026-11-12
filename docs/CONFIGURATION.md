@@ -9,6 +9,6 @@ Files live in the Minecraft game directory's `config/` folder:
 
 The client reads these filenames directly. Saved preferences and unknown properties survive writes; loading never rewrites arena bounds or enables a disabled setting. Writes replace files atomically where supported.
 
-`/o status` reports configuration errors. `/o guard`, `/o routes`, `/o profile`, `/o seed` and `/o parkour` save changes without stopping an active run. F9 always stops.
+`/o status` reports configuration errors. `/o guard`, `/o routes`, `/o profile` and `/o seed` save changes without stopping an active run. F9 always stops.
 
 Fresh settings use the configured default controller. `/o controller Name` pairs another account; `/o controller off` disables chat control.

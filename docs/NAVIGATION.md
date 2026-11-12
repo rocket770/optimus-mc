@@ -1,6 +1,6 @@
 # Navigation
 
-The planner works from collision geometry: walking, steps, drops and checked jumps. It replans around obstacles and moving targets, and waits when a route is unavailable.
+The planner works from collision geometry: walking, steps, drops and checked jumps. Stair descents keep momentum and use gravity between steps. It replans around obstacles and moving targets, and waits when a route is unavailable.
 
 Open `editor/index.html`. Load a map, add areas, preview directed connections, then **Export hints**. The bundled pit is an example; the map tools also work with other 1.8.x maps.
 

@@ -376,7 +376,7 @@ final class RouteHints {
     }
 
     java.util.function.ToDoubleFunction<Node> estimateTo(
-            Vec3Point destination, PitRegion area, boolean parkour, Predicate<String> blocked) {
+            Vec3Point destination, PitRegion area, boolean jumpAllowed, Predicate<String> blocked) {
         final double[] remaining = new double[points.size()];
         Arrays.fill(remaining, Double.POSITIVE_INFINITY);
         PriorityQueue<Entry> open = new PriorityQueue<>();
@@ -395,7 +395,7 @@ final class RouteHints {
             Entry current = open.remove();
             if (current.cost != remaining[current.id]) continue;
             for (Edge edge : incoming.get(current.id)) {
-                if (!parkour && edge.kind != 0 && edge.kind != 1 && edge.kind != 3) continue;
+                if (!jumpAllowed && edge.kind != 0 && edge.kind != 1 && edge.kind != 3) continue;
                 if (edge.kind >= 4) {
                     String k = key(node(points.get(edge.from)), node(points.get(edge.to)));
                     if (!savedAdvanced.contains(k) || blocked.test(k)) continue;
@@ -420,7 +420,7 @@ final class RouteHints {
             final GroundRoute ground,
             final CollisionGeometry live,
             final PitRegion area,
-            final boolean parkour,
+            final boolean jumpAllowed,
             final Predicate<String> blocked) {
         return new GridPathfinder.Terrain() {
             final Map<String, Boolean> available = new HashMap<>(), checked = new HashMap<>();
@@ -440,7 +440,7 @@ final class RouteHints {
                 Boolean old = checked.get(k);
                 if (old != null) return old;
                 boolean clear =
-                        allowed(edge, parkour)
+                        allowed(edge, jumpAllowed)
                                 && !blocked.test(k)
                                 && ground.standable(node(points.get(edge.from)))
                                 && ground.standable(node(points.get(edge.to)));
@@ -511,12 +511,12 @@ final class RouteHints {
         };
     }
 
-    private static boolean allowed(Edge edge, boolean parkour) {
-        return parkour || edge.kind == 0 || edge.kind == 3;
+    private static boolean allowed(Edge edge, boolean jumpAllowed) {
+        return jumpAllowed || edge.kind == 0 || edge.kind == 3;
     }
 
     private List<Edge> shortest(
-            List<List<Edge>> edges, Set<Integer> starts, Set<Integer> goals, boolean parkour) {
+            List<List<Edge>> edges, Set<Integer> starts, Set<Integer> goals, boolean jumpAllowed) {
         double[] costs = new double[points.size()];
         Arrays.fill(costs, Double.POSITIVE_INFINITY);
         Edge[] parents = new Edge[points.size()];
@@ -535,7 +535,7 @@ final class RouteHints {
                 return path;
             }
             for (Edge edge : edges.get(entry.id))
-                if (allowed(edge, parkour) && entry.cost + edge.cost < costs[edge.to]) {
+                if (allowed(edge, jumpAllowed) && entry.cost + edge.cost < costs[edge.to]) {
                     costs[edge.to] = entry.cost + edge.cost;
                     parents[edge.to] = edge;
                     open.add(new Entry(edge.to, costs[edge.to]));
@@ -565,7 +565,7 @@ final class RouteHints {
             PitRegion area,
             Vec3Point from,
             Vec3Point destination,
-            boolean parkour,
+            boolean jumpAllowed,
             Predicate<String> blocked) {
         if (live.autoStepClear(from, destination, area)) return null;
         List<Integer> starts = attach(from, live, area), goals = attach(destination, live, area);
@@ -596,7 +596,7 @@ final class RouteHints {
                 }
             }
             for (Edge edge : corridors.get(current.id))
-                if (allowed(edge, parkour)
+                if (allowed(edge, jumpAllowed)
                         && !blocked.test(
                                 key(node(points.get(edge.from)), node(points.get(edge.to))))) {
                     double next = current.cost + edge.cost;

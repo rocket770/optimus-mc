@@ -15,7 +15,7 @@ public final class PitPatrolSelfTest {
     private static int checks;
     private static void expect(boolean value,String why) { checks++;if(!value) throw new AssertionError(why); }
     private static GroundRoute terrain(CollisionGeometry geometry,PitRegion pit) {
-        return new GroundRoute(geometry.cached(),pit,pit,new Vec3Point(-2,78,-78),63,true,true);
+        return new GroundRoute(geometry.cached(),pit,pit,new Vec3Point(-2,78,-78),63,true);
     }
     private static List<Node> validate(CollisionGeometry geometry,PitRegion pit,Vec3Point current,long seed) {
         GroundRoute route=terrain(geometry,pit);

@@ -1,16 +1,26 @@
-Optimus 1.0.4 - verified 12 November 2026
+Optimus 1.0.10 - verified 12 November 2026
 Java 8 / Gradle 2.7 / Windows
 
-Full release build and 67 JVM test invocations: PASS
-Guard parity: 97 replays, 19,546 exact native states, zero differences
-Reference: saved pre-extraction controller, repeated baseline was stable
-Shared combat/navigation/guard/geometry policies: 40 files unchanged
-Known jitter/edge threshold misses: nine reproduced in both versions
-Automatic input, optional binding and publisher sequence regressions: PASS
-65 original guard combat scenarios and 355 Windows input checks: PASS
-JVM shutdown: 500 observations flushed; life/session sealed
+Full release build and 74 JVM verification tasks: PASS
+Standalone PowerShell core runner: PASS
+742 existing scenario outcomes preserved
+Guard equipment, aim, lifecycle and input: 282 checks passed
+Guard relay and source-aware damage-feedback timing: 201 checks passed
+Ground contact: 17 geometry checks; navigation adapter: 153 checks passed
+Old code fails the new edge-supported patrol, two-cell search and unresolved-swing checks
+Server-observed swings use a bounded initial wait; local cues retain network-feedback timing
+Guard pressure: 48 cases passed; 120 accepted modeled guard hits, no immunity rejections
+Guard owns the second modeled hit in all 24 shared-melee cases
+Original 65 guard scenarios, 32 stopping and 18 engagement cases: PASS
+Distant pursuit: 42 cases; waiting patrol: 6 cases passed
+Combat/navigation handoff and respawn menus: 411 checks passed
+Stairs: 64 native direction/heading/combat replays and 17 corridor checks passed
+Reference: 97 scenarios, 19,546 native states; two fresh captures match 1.0.9 exactly
+All 10,472 movement states and seven deferred step failures unchanged
 Python learning pipeline: 37 tests passed
+Fresh native recording: 23 combat observations prepared; no overlapping request windows
 Example world: 32,251 block states, 106 signs and 20 chunks verified
-Source privacy and product naming scan: PASS
 
-Parity covers the recorded scenarios. Live gameplay has not been smoke-tested.
+Review: docs/RELEASE_CHECKLIST.md; deferred failures: docs/KNOWN_ISSUES.md
+Live Minecraft confirmation pending, including the intermittent unfocused stall.
+Hit acceptance uses an offline server model.

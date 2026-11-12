@@ -1,9 +1,11 @@
 package dev.optimus.core.guard;
 
-/** One recent swing, never a backlog. Server hit acceptance remains authoritative. */
+/** One bounded fight intent, refreshed by the guarded player rather than by our own attacks. */
 public final class GuardAssist {
+    public static final int ENGAGEMENT_TICKS = 30;
+    private static final int UNKNOWN_SWING_TICKS = 12;
     private String observed = "", victim = "";
-    private long expires = Long.MIN_VALUE;
+    private long expires = Long.MIN_VALUE, observedAt = Long.MIN_VALUE;
     private long retryAt = Long.MAX_VALUE;
     private boolean attempted, followup;
 
@@ -14,7 +16,7 @@ public final class GuardAssist {
 
     public void cancel() {
         victim = "";
-        expires = Long.MIN_VALUE;
+        expires = observedAt = Long.MIN_VALUE;
         retryAt = Long.MAX_VALUE;
         attempted = followup = false;
     }
@@ -23,13 +25,14 @@ public final class GuardAssist {
         if (event == null || event.isEmpty() || event.equals(observed)) return;
         observed = event;
         victim = target == null ? "" : target;
-        expires = tick + 12;
+        observedAt = tick;
+        expires = tick + (victim.isEmpty() ? UNKNOWN_SWING_TICKS : ENGAGEMENT_TICKS);
         retryAt = Long.MAX_VALUE;
         attempted = followup = false;
     }
 
     public boolean live(long tick) {
-        return tick <= expires;
+        return tick < expires;
     }
 
     public boolean pending(long tick) {
@@ -41,13 +44,9 @@ public final class GuardAssist {
     }
 
     public void attackSent(long tick) {
-        if (attempted) {
-            cancel();
-            return;
-        }
+        if (!live(tick)) return;
         attempted = true;
         followup = false;
-        expires = Math.max(expires, tick + 16);
     }
 
     public void attackSent(long tick, int roundTripMillis) {
@@ -66,6 +65,8 @@ public final class GuardAssist {
             retryAt = Long.MAX_VALUE;
         }
         victim = next;
+        if (!next.isEmpty() && observedAt != Long.MIN_VALUE)
+            expires = observedAt + ENGAGEMENT_TICKS;
     }
 
     /**

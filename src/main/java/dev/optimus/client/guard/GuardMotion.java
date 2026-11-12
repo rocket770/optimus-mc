@@ -26,10 +26,6 @@ final class GuardMotion {
         steering = new GuardSteering(ctx, combat);
     }
 
-    boolean safeInput(NearbySteering.Input input, boolean sprint, boolean sneak, PitRegion pit) {
-        return steering.safeInput(input, sprint, sneak, pit);
-    }
-
     boolean routing() {
         return routing;
     }
@@ -53,11 +49,12 @@ final class GuardMotion {
             knockbackUntil = tick + 12;
             steering.unsettle();
         }
-        return tick <= knockbackUntil
-                || knockbackUntil != Long.MIN_VALUE
-                        && (!leader.onGround
-                                || position(ctx.mc.thePlayer).horizontalDistanceSq(position(leader))
-                                        > 2.25);
+        if (knockbackUntil == Long.MIN_VALUE) return false;
+        if (tick > knockbackUntil && leader.onGround) {
+            knockbackUntil = Long.MIN_VALUE;
+            return false;
+        }
+        return true;
     }
 
     void follow(
@@ -69,9 +66,7 @@ final class GuardMotion {
         EntityPlayer player = observation.player;
         Vec3Point pose = observation.pose, velocity = observation.velocity;
         float yaw = observation.yaw, pitch = observation.pitch;
-        boolean sneak = observation.sneak,
-                sprint = observation.sprint,
-                knocked = observation.knocked;
+        boolean sneak = observation.sneak, knocked = observation.knocked;
         GuardInputRelay.Frame frame = observation.frame;
         GuardWindowsKeys.Input desktop = observation.desktop;
         boolean fighting = combat.engaged(pit, tick);
@@ -81,7 +76,7 @@ final class GuardMotion {
         long idle = offset.phase;
         Vec3Point followPose = offset.pose;
         Vec3Point self = position(ctx.mc.thePlayer), goal = GuardFollow.anchor(followPose, yaw);
-        goal = combat.goal(self, pose, goal, yaw, pit, tick, velocity);
+        goal = combat.goal(self, pose, goal, pit, tick, velocity);
         if (!pit.containsBody(goal, .3, 1.8)) goal = pose;
         // A rear offset can be inside the step the leader just left. Route to
         // real feet instead of searching for an impossible point in that block.
@@ -178,14 +173,17 @@ final class GuardMotion {
         if (routing) {
             if (!beforeMovement) {
                 ctx.host.guardNavigate(connection, pit, tick < recoverUntil, travelJump);
-                // Navigation chooses a world direction; combat owns the view.
-                // Keep a committed parkour launch's heading until it lands.
-                boolean aim = !ctx.navigator.jumpInProgress() && !ctx.navigator.preparingGap();
-                float travelYaw = ctx.mc.thePlayer.rotationYaw;
-                NearbySteering.Input travel = ctx.host.guardMovement();
-                combat.assist(pit, tick, aim, equipmentReady, observation.sword);
-                if (aim) ctx.host.guardReorient(travel, travelYaw, pit);
             }
+            // Distant assists retain their target, but navigation owns the camera
+            // until close following or actual combat reach can take over.
+            boolean aim =
+                    (directCombat || self.horizontalDistanceSq(pose) <= 6.25)
+                            && !ctx.navigator.jumpInProgress()
+                            && !ctx.navigator.preparingGap();
+            float travelYaw = ctx.mc.thePlayer.rotationYaw;
+            NearbySteering.Input travel = ctx.host.guardMovement();
+            combat.assist(pit, tick, aim, equipmentReady, observation.sword);
+            if (aim) ctx.host.guardReorient(travel, travelYaw, pit);
             return;
         }
         // Only a connected close follow may replace navigation's camera/runway.

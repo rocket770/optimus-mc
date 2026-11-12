@@ -94,6 +94,7 @@ public final class GuardCombatSimulationSelfTest {
         final GuardController guard;
         final LobbySafety safety;
         final Controller controller;
+        final CombatTrace combatAudit;
         final EmbeddedChannel channel;
         final PriorityQueue<Event> packets = new PriorityQueue<>();
         final Random jitter;
@@ -105,6 +106,7 @@ public final class GuardCombatSimulationSelfTest {
         String secondOwner = "", firstOwner = "";
         float health = 40;
         double maximumSeparation, maximumAhead;
+        double maximumReleaseAhead = Double.NEGATIVE_INFINITY;
         boolean physicalForward, physicalAttack, physicalJump;
         int physicalSide;
         boolean physicalBack;
@@ -123,6 +125,15 @@ public final class GuardCombatSimulationSelfTest {
         int responseAt = -1, observedResponseAt = -1, releaseAt = -1;
         double responseBotZ, responseOwnerZ;
         boolean fighting;
+        int lateFarJumps, waitingMoves, maximumWaitingIdle, lastWaitingMove;
+        double waitingDistance;
+        int waitingReturnAt = -1;
+        boolean returnedDuringFlight;
+        final Set<String> waitingCells = new HashSet<>();
+
+        boolean farTravel() { return scenario.name.startsWith("movement_far_"); }
+        boolean targetTravel() { return scenario.name.contains("_target_catchup_"); }
+        boolean waitingTest() { return scenario.name.startsWith("movement_waiting_"); }
 
         boolean defensive() {
             return scenario.name.startsWith("defense_");
@@ -220,6 +231,22 @@ public final class GuardCombatSimulationSelfTest {
                 position(bot, new Vec3Point(0, 63, -118), 0);
             else if (scenario.name.contains("catchup"))
                 position(bot, new Vec3Point(0, 63, -123), 0);
+            if (farTravel()) {
+                position(main, new Vec3Point(0, 63, -100), 0);
+                position(leader, point(main), 0);
+                position(bot, new Vec3Point(0, 63, -122), 0);
+                position(enemy, new Vec3Point(0, 63, -98), 0);
+                position(opponent, point(enemy), 0);
+            }
+            if (waitingTest()) {
+                position(main, new Vec3Point(30, 63, -110), 0);
+                position(leader, point(main), 0);
+                if (scenario.name.contains("island")) {
+                    world.cells.clear();
+                    world.add(0, 62, -116, 0, 62, -116, 1, 63, -115);
+                    position(bot, new Vec3Point(.5, 63, -115.5), 0);
+                }
+            }
             if (delayedAim()) {
                 main.rotationYaw = 90;
                 leader.rotationYawHead = 90;
@@ -265,10 +292,18 @@ public final class GuardCombatSimulationSelfTest {
             settings.hypixelPit.setCornerA(new Vec3Point(-25, 62.5, -127));
             settings.hypixelPit.setCornerB(new Vec3Point(25, 78, -77));
             settings.pitEntrance = new Vec3Point(0, 63, -115);
+            if (targetTravel()) {
+                settings.guardName = settings.guardUuid = "";
+                settings.targetAll = true;
+                world.playerEntities.removeIf(player -> player == leader);
+            }
             events = new ClientEvents();
+            combatAudit = targetTravel() ? new CombatTrace(settings.traceDirectory()) : null;
+            if (combatAudit != null) set(events, "trace", combatAudit);
+            ((Random) get(events, "patrolRandom")).setSeed(731);
             guard = (GuardController) get(events, "guard");
             set(guard, "listening", true);
-            ((Random) get(get(events, "combat"), "random")).setSeed(settings.combatSeed);
+            ((CombatController) get(events, "combat")).reconfigure(settings.combatSeed, 0);
             GuardTestInputs.install(
                     guard,
                     () -> true,
@@ -473,10 +508,23 @@ public final class GuardCombatSimulationSelfTest {
         }
 
         boolean run() throws Exception {
-            for (now = 0; now <= 5000; now += 25) {
+            for (now = 0; now <= (waitingTest() ? 65000 : 5000); now += 25) {
                 while (!packets.isEmpty() && packets.peek().at <= now)
                     packets.remove().action.run();
                 if (now % 50 == 0) {
+                    if (farTravel() && scenario.name.contains("damaged") && now == 100)
+                        ordered("server_in", now + latency(), () -> {
+                            leader.hurtTime = 10;
+                            leader.getDataWatcher().updateObject(6, Float.valueOf(34));
+                        });
+                    if (waitingTest() && !scenario.name.contains("island") && waitingReturnAt < 0
+                            && (scenario.name.contains("flight_return")
+                                    ? now >= 1000 && !bot.onGround
+                                            && ((LobbyNavigator)get(events, "navigator")).jumpInProgress()
+                                    : now == 60000)) {
+                        waitingReturnAt = now;
+                        position(main, new Vec3Point(0, 63, -110), 0);
+                    }
                     if (scenario.name.equals("guarded_knockback_fighting_250") && now == 1000) {
                         main.motionZ = -.72;
                         main.motionY = .42;
@@ -529,6 +577,8 @@ public final class GuardCombatSimulationSelfTest {
                         physicalJump = false;
                         if (responseTest()) {
                             physicalForward = now >= 1000 && now < 1200;
+                        } else if (scenario.name.contains("release")) {
+                            physicalForward = now >= 500 && now < 1500;
                         } else if (scenario.name.contains("turns")) {
                             physicalForward = now >= 500 && now < 2500;
                             main.rotationYaw =
@@ -564,6 +614,8 @@ public final class GuardCombatSimulationSelfTest {
                             physicalBack = now >= 1500 && now < 2100;
                         }
                     }
+                    if (farTravel() && scenario.name.contains("_running_")) physicalForward = now < 2000;
+                    if (waitingTest()) physicalForward = physicalBack = false;
                     if (responseTest() && now == 1000) {
                         responseBotZ = bot.posZ;
                         responseOwnerZ = leader.posZ;
@@ -719,14 +771,36 @@ public final class GuardCombatSimulationSelfTest {
                             && Math.abs(leader.posZ - responseOwnerZ) > .02)
                         observedResponseAt = now;
                     set(events, "tickNo", tick);
-                    guard.step(OptimusMod.settings.hypixelPit, tick, true);
+                    if (!targetTravel()) guard.step(OptimusMod.settings.hypixelPit, tick, true);
+                    if (waitingTest() && waitingReturnAt >= 0
+                            && OptimusMod.settings.hypixelPit.containsBody(point(leader), .3, 1.8)
+                            && !bot.onGround && ((LobbyNavigator)get(events, "navigator")).jumpInProgress()
+                            && (boolean)get(guard, "waiting") && get(guard, "leader") == null)
+                        returnedDuringFlight = true;
                     GuardReplayTrace.capture(trace, scenario.name, now, "before-movement", mc, guard, guardRequests);
                     if (responseTest()
                             && responseAt >= 0
                             && now >= 1200
                             && releaseAt < 0
                             && !mc.gameSettings.keyBindForward.isKeyDown()) releaseAt = now;
+                    // The live client also refreshes guard input at PlayerTick.START.
+                    if (Boolean.getBoolean("optimus.guardRelease") || Boolean.getBoolean("optimus.guardPressure"))
+                        guard.step(OptimusMod.settings.hypixelPit, tick, true);
+                    int previousJumps = bot.jumps;
+                    Vec3Point beforeMove = point(bot);
                     bot.physics(mc.gameSettings);
+                    if (farTravel() && now >= 1000 && bot.jumps > previousJumps
+                            && point(bot).horizontalDistanceSq(point(main)) > 64) lateFarJumps++;
+                    if (waitingTest() && now < 60000 && waitingReturnAt < 0) {
+                        double moved = Math.sqrt(point(bot).horizontalDistanceSq(beforeMove));
+                        waitingDistance += moved;
+                        if (moved > .02) {
+                            waitingMoves++;
+                            lastWaitingMove = now;
+                        }
+                        maximumWaitingIdle = Math.max(maximumWaitingIdle, now - lastWaitingMove);
+                        waitingCells.add(Math.round(bot.posX) + ":" + Math.round(bot.posZ));
+                    }
                     if (responseTest()
                             && now >= 1000
                             && responseAt < 0
@@ -752,7 +826,9 @@ public final class GuardCombatSimulationSelfTest {
                                 serverBot = sent;
                             });
                     set(events, "tickNo", tick + 1);
-                    guard.step(OptimusMod.settings.hypixelPit, tick);
+                    if (targetTravel()) ((CombatController) get(events, "combat")).fight(
+                            OptimusMod.settings.hypixelPit, point(bot));
+                    else guard.step(OptimusMod.settings.hypixelPit, tick);
                     GuardReplayTrace.capture(trace, scenario.name, now, "after-movement", mc, guard, guardRequests);
                     boolean phase = guard.status().contains("phase: fighting");
                     if (phase != fighting) phaseChanges++;
@@ -789,6 +865,10 @@ public final class GuardCombatSimulationSelfTest {
                                     maximumAhead,
                                     (bot.posX - main.posX) * -Math.sin(angle)
                                             + (bot.posZ - main.posZ) * Math.cos(angle));
+                    if (scenario.name.contains("release") && now >= 1500)
+                        maximumReleaseAhead = Math.max(maximumReleaseAhead,
+                                (bot.posX - main.posX) * -Math.sin(angle)
+                                        + (bot.posZ - main.posZ) * Math.cos(angle));
                     Vec3Point mainEye =
                             new Vec3Point(main.posX, main.posY + main.getEyeHeight(), main.posZ);
                     if (!movementOnly()
@@ -826,16 +906,18 @@ public final class GuardCombatSimulationSelfTest {
                             && (scenario.jitter == 0 && !scenario.moving
                                     ? secondOwner.equals("GUARD")
                                     : true)
-                            && maximumAhead < .8
+                            // An assisted knockback exchange may briefly close toward the
+                            // opponent, within the same tether used by combat positioning.
+                            && maximumAhead < (scenario.kick > 0 ? 1.8 : .8)
                             && maximumSeparation
                                     < (responseTest() && scenario.name.contains("observed")
                                             ? 2
-                                            : 1.3);
+                                            : scenario.kick > 0 ? 1.8 : 1.3);
             double settledError =
                     Math.sqrt(
                             point(bot)
                                     .horizontalDistanceSq(
-                                            GuardFollow.anchor(point(main), main.rotationYaw)));
+                                            targetTravel() ? point(enemy) : GuardFollow.anchor(point(main), main.rotationYaw)));
             // Abrupt, unseen camera turns can separate the clients during the
             // round trip. Bound recovery within the existing three-block
             // approach handoff, then require actual close settling.
@@ -857,6 +939,10 @@ public final class GuardCombatSimulationSelfTest {
                                 && (scenario.name.contains("catchup")
                                         ? bot.jumps >= 1
                                         : bot.jumps == (scenario.name.contains("jump") ? 1 : 0));
+            if (scenario.name.contains("release"))
+                success = guardRequests == 0 && bot.jumps == 0 && settledError < .12
+                        && maximumSeparation < (scenario.name.contains("keys") ? .8 : 3.5)
+                        && maximumReleaseAhead < (scenario.name.contains("keys") ? -.2 : 0);
             if (scenario.name.startsWith("movement_step_"))
                 success =
                         guardRequests == 0
@@ -923,6 +1009,31 @@ public final class GuardCombatSimulationSelfTest {
                                                         ? maximumCombatViewRun <= 8
                                                                 && maximumBlockedRun <= 20
                                                         : maximumBlockedRun <= 8));
+            if (scenario.name.startsWith("assist_chase_"))
+                success = mainHits == 1
+                        && (guardHits >= 1 || point(main).horizontalDistanceSq(point(enemy)) > 4.5 * 4.5)
+                        && guardHits <= 3 && guardRequests <= 6 && lastGuardRequest < 2500
+                        && maximumSeparation < 1.8 && maximumAhead < 1.8
+                        && maximumBlockedRun <= 15 && settledError < .12 && bot.jumps == 0
+                        && phaseChanges <= 2 && !guard.status().contains("phase: fighting");
+            if (scenario.name.contains("_pressure_"))
+                success = guardHits >= 2 && guardHits <= 3 && guardRequests <= 8
+                        && lastGuardRequest < 2700 && maximumSeparation < 1.8
+                        && maximumAhead < 1.8 && settledError < .12
+                        && !guard.status().contains("phase: fighting");
+            if (scenario.name.startsWith("assist_pressure_"))
+                success &= firstGuardRequest > 500 + scenario.phase && secondOwner.equals("GUARD");
+            if (farTravel())
+                success = lateFarJumps > 0 && bot.jumps >= 2
+                        && point(bot).horizontalDistanceSq(targetTravel() ? point(enemy) : point(main))
+                                < (targetTravel() ? 3.25 * 3.25 : 16);
+            if (waitingTest())
+                success = guardRequests == 0 && (scenario.name.contains("island")
+                        ? waitingDistance < .1 && waitingCells.size() == 1
+                        : waitingDistance > 30 && waitingMoves > 100 && waitingCells.size() > 10
+                                && maximumWaitingIdle < 5000 && get(guard, "leader") == leader);
+            if (waitingTest() && scenario.name.contains("flight_return"))
+                success = guardRequests == 0 && returnedDuringFlight && get(guard, "leader") == leader;
             if (responseTest())
                 success &=
                         responseAt >= 0
@@ -982,13 +1093,21 @@ public final class GuardCombatSimulationSelfTest {
                                     : responseAt - observedResponseAt)
                             + " release_ms="
                             + (releaseAt < 0 ? -1 : releaseAt - 1200));
+            if (farTravel() || waitingTest())
+                System.out.println("Travel metrics: " + scenario.name + " late_far_jumps=" + lateFarJumps
+                        + " waiting_distance=" + waitingDistance + " waiting_cells=" + waitingCells.size()
+                        + " longest_idle_ms=" + maximumWaitingIdle);
+            if (scenario.name.contains("release"))
+                System.out.println("Release spacing: " + scenario.name + " minimum_rear_distance="
+                        + String.format(Locale.ROOT, "%.3f", -maximumReleaseAhead));
             return success;
         }
 
         @Override
-        public void close() {
+        public void close() throws Exception {
             guard.reset();
             channel.finish();
+            if (combatAudit != null) combatAudit.close();
         }
     }
 
@@ -1143,6 +1262,26 @@ public final class GuardCombatSimulationSelfTest {
                             "movement_" + movement + "_250", 250, 0, 0, 2, 0, true, false, false));
         if (Boolean.getBoolean("optimus.guardParity"))
             scenarios.addAll(GuardSimulationCase.edgeCases());
+        if (Boolean.getBoolean("optimus.guardRelease")) {
+            scenarios.clear();
+            scenarios.addAll(GuardSimulationCase.releaseCases());
+        }
+        if (Boolean.getBoolean("optimus.guardEngagement")) {
+            scenarios.clear();
+            scenarios.addAll(GuardSimulationCase.engagementCases());
+        }
+        if (Boolean.getBoolean("optimus.guardPressure")) {
+            scenarios.clear();
+            scenarios.addAll(GuardSimulationCase.pressureCases());
+        }
+        if (Boolean.getBoolean("optimus.guardTravel")) {
+            scenarios.clear();
+            scenarios.addAll(GuardSimulationCase.travelCases());
+        }
+        if (Boolean.getBoolean("optimus.guardWaiting")) {
+            scenarios.clear();
+            scenarios.addAll(GuardSimulationCase.waitingCases());
+        }
         try {
             for (GuardSimulationCase scenario : scenarios)
                 try (Simulation simulation = new Simulation(scenario, unsafe, trace)) {

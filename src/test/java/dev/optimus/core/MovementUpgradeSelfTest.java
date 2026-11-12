@@ -98,7 +98,7 @@ public final class MovementUpgradeSelfTest {
         Vec3Point lower=new Vec3Point(-13.8,63.5,-116.9),upper=new Vec3Point(-13.5,64,-116.5);
         expect(captured.standable(pit,lower),"actual lower stair phase has collision support");
         expect(captured.autoStepClear(lower,upper,pit),"actual lower half to upper half is auto-stepable without a jump");
-        GroundRoute route=new GroundRoute(captured.cached(),pit,pit,null,63,true,true);
+        GroundRoute route=new GroundRoute(captured.cached(),pit,pit,null,63,true);
         Node aligned=route.start(lower);
         expect(aligned!=null,"standing on a half stair resolves a usable grid start despite different centre height");
         expect(captured.autoStepClear(lower,route.point(aligned),pit),"stair alignment is reached by actual half-step surfaces");
@@ -195,11 +195,11 @@ public final class MovementUpgradeSelfTest {
             return CollisionGeometry.Cell.AIR;
         });
         Vec3Point lip=new Vec3Point(.5,69,-100.5),landing=new Vec3Point(1.5,63,-100.5);
-        GroundRoute falls=new GroundRoute(cliff,pit,pit,null,63,true,true);
+        GroundRoute falls=new GroundRoute(cliff,pit,pit,null,63,true);
         expect(falls.edgeClear(lip,landing),"pit fall without damage needs no named rim or three-block cap");
         PitRegion outside=area(60,90),combat=area(62.5,78);combat.setCornerA(new Vec3Point(-30,62.5,-130));combat.setCornerB(new Vec3Point(-10,78,30));
-        expect(!new GroundRoute(cliff,outside,combat,null,63,true,true).edgeClear(lip,landing),"no-fall-damage allowance cannot extend into lobby terrain outside combat pit");
-        expect(new GroundRoute(cliff,pit,pit,null,63,true,true).extraNeighbors(new Node(0,138,-101)).iterator().hasNext(),"planner exposes deeper supported pit drop candidates");
+        expect(!new GroundRoute(cliff,outside,combat,null,63,true).edgeClear(lip,landing),"no-fall-damage allowance cannot extend into lobby terrain outside combat pit");
+        expect(new GroundRoute(cliff,pit,pit,null,63,true).extraNeighbors(new Node(0,138,-101)).iterator().hasNext(),"planner exposes deeper supported pit drop candidates");
         CombatFocus<String> focus=new CombatFocus<>();TargetWhitelist whitelist=new TargetWhitelist();whitelist.add("OldTarget");
         List<String> players=Arrays.asList("OldTarget","NewTarget");
         expect("OldTarget".equals(focus.select(players,whitelist::contains,n->n.equals("OldTarget")?16:4)),"old listed target selected before live edit");

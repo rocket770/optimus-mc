@@ -224,14 +224,6 @@ public final class OptimusCommand extends CommandBase {
                 }
                 OptimusMod.events.applySuppliedArena();
                 return;
-            case "parkour":
-                if (args.length != 2
-                        || (!args[1].equalsIgnoreCase("on") && !args[1].equalsIgnoreCase("off"))) {
-                    notice("Usage: /o parkour on|off");
-                    return;
-                }
-                OptimusMod.events.setParkour(args[1].equalsIgnoreCase("on"));
-                return;
             case "start":
                 OptimusMod.events.requestStart(remoteReplies != null);
                 notice("Starting...");
@@ -281,7 +273,6 @@ public final class OptimusCommand extends CommandBase {
                     "clear",
                     "locraw",
                     "preset",
-                    "parkour",
                     "profile",
                     "pit",
                     "entrance",
@@ -329,8 +320,6 @@ public final class OptimusCommand extends CommandBase {
                 return getListOfStringsMatchingLastWord(args, "status", "reload", "on", "off");
             if (args[0].equalsIgnoreCase("profile"))
                 return getListOfStringsMatchingLastWord(args, "balanced", "baseline", "paced");
-            if (args[0].equalsIgnoreCase("parkour"))
-                return getListOfStringsMatchingLastWord(args, "on", "off");
             if (args[0].equalsIgnoreCase("preset"))
                 return getListOfStringsMatchingLastWord(args, "supplied");
             if (args[0].equalsIgnoreCase("pit"))
@@ -350,7 +339,7 @@ public final class OptimusCommand extends CommandBase {
                 "/o operator add <name> | remove <name> | list | clear (targets, weapons and start/stop)");
         notice("/o add, remove, list and clear also work");
         notice("/o say <message>");
-        notice("/o parkour on|off | /o profile balanced|baseline|paced | /o seed <integer>");
+        notice("/o profile balanced|baseline|paced | /o seed <integer>");
         notice("/o routes status|reload|on|off (reload reads config/optimus-route-hints.json)");
         notice("/o visuals on|off|status (waypoints, blocks, jump projections and movement trail)");
         notice("Guard and combat option changes preserve an active run.");

@@ -89,6 +89,16 @@ final class GuardBridge implements GuardHost {
         movement.releaseMovement();
     }
 
+    public void guardRoam(PitRegion pit) {
+        session.roamPit(pit);
+    }
+
+    public void guardCancelRoam() {
+        session.cancelRoaming();
+        navigator.reset();
+        movement.releaseMovement();
+    }
+
     public NearbySteering.Input guardMovement() {
         return movement.snapshot().direction;
     }
@@ -100,7 +110,19 @@ final class GuardBridge implements GuardHost {
         }
         LobbyNavigator.Step jump = !precise && travelJump ? queries.sprintJump(goal, pit) : null;
         if (jump != null) session.navigateStep(goal, pit, jump);
-        else if (precise || !travelJump)
+        else if (!precise
+                && travelJump
+                && !navigator.jumpInProgress()
+                && !navigator.preparingGap()
+                && queries.autoStep(PlayerGeometry.position(mc.thePlayer), goal, pit)) {
+            // Clear ground is already checked; do not wait for A* to rediscover it.
+            navigator.reset();
+            session.navigateStep(
+                    goal,
+                    pit,
+                    new LobbyNavigator.Step(
+                            LobbyNavigator.Status.MOVING, goal, false, false, true, null));
+        } else if (precise || !travelJump)
             session.navigateStep(goal, pit, navigator.step(goal, pit, !precise, session.tick()));
         else session.navigate(goal, pit, true);
     }

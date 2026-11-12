@@ -5,6 +5,7 @@ import dev.optimus.core.geometry.Vec3Point;
 import dev.optimus.core.guard.GuardAssist;
 import dev.optimus.core.guard.GuardCombatWindow;
 import dev.optimus.core.guard.GuardFollow;
+import dev.optimus.core.guard.GuardSwingSource;
 import dev.optimus.core.navigation.GroundMotion;
 import dev.optimus.core.navigation.NearbySteering;
 import java.io.File;
@@ -60,14 +61,14 @@ public final class GuardInputRelaySelfTest {
         queue.observe("first", "victim", 10);
         expect(queue.pending(10) && queue.victim().equals("victim"), "fresh swing is queued");
         queue.observe("first", "victim", 20);
-        expect(!queue.pending(23), "repeated snapshots cannot extend an expired swing");
-        queue.observe("second", "other", 24);
+        expect(!queue.pending(40), "repeated snapshots cannot extend an expired swing");
+        queue.observe("second", "other", 42);
         expect(
-                queue.pending(24) && queue.victim().equals("other"),
+                queue.pending(42) && queue.victim().equals("other"),
                 "new swing replaces old intent");
         queue.cancel();
-        queue.observe("second", "other", 25);
-        expect(!queue.pending(25), "completed swing cannot replay");
+        queue.observe("second", "other", 43);
+        expect(!queue.pending(43), "completed swing cannot replay");
         expect(
                 !GuardAssist.hitWindow(10, 0) && GuardAssist.hitWindow(0, 0),
                 "zero-ping hit window waits for observed cooldown");
@@ -91,8 +92,8 @@ public final class GuardInputRelaySelfTest {
         followup.attackSent(11);
         followup.damageObserved(13);
         expect(
-                !followup.pending(13) && !followup.live(13),
-                "a second request consumes the follow-up and later damage cannot restart it");
+                followup.pending(13) && !followup.live(30),
+                "a rejected second request does not consume the fight; its original deadline still ends it");
         GuardCombatWindow window = new GuardCombatWindow();
         expect(
                 !window.observe("victim", 0, 20, 0),
@@ -107,9 +108,41 @@ public final class GuardInputRelaySelfTest {
         expect(
                 window.observe("victim", 10, 14, 6) && !window.ready(6, 10, 250),
                 "damage evidence retains the actual immunity wait");
-        expect(
-                window.ready(11, 5, 250),
-                "250-ms arrival estimate admits the next modeled server window");
+        expect(window.ready(11, 5, 250), "follow-up retains the earliest predicted server window");
+        for (int[] sample : new int[][] {{0, 2}, {100, 3}, {250, 3}, {400, 3}}) {
+            GuardCombatWindow feedback = new GuardCombatWindow();
+            int ping = sample[0], until = sample[1];
+            feedback.awaitDamage("target", 0, ping, GuardSwingSource.SERVER_OBSERVED);
+            feedback.observe("target", 0, 20, 0);
+            expect(!feedback.ready(until - 1, 0, ping), "initial assist waits for damage feedback");
+            feedback.awaitDamage("target", until - 1, ping, GuardSwingSource.SERVER_OBSERVED);
+            expect(
+                    feedback.ready(until, 0, ping),
+                    "unconfirmed hits cannot delay the first assist beyond 150 milliseconds");
+        }
+        for (GuardSwingSource source :
+                new GuardSwingSource[] {
+                    GuardSwingSource.LOCAL_KEYS, GuardSwingSource.CLIENT_RELAY
+                }) {
+            GuardCombatWindow feedback = new GuardCombatWindow();
+            feedback.awaitDamage("target", 0, 250, source);
+            feedback.observe("target", 0, 20, 0);
+            expect(!feedback.ready(3, 0, 250), "local cues retain the full feedback window");
+            feedback.awaitDamage("target", 6, 250, source);
+            expect(
+                    !feedback.ready(6, 0, 250) && feedback.ready(7, 0, 250),
+                    "repeated local swings do not extend the initial wait");
+            expect(feedback.observe("target", 10, 14, 8), "damage is observed for local cues");
+            expect(
+                    !feedback.ready(8, 10, 250) && feedback.ready(13, 5, 250),
+                    "local cues retain the actual target immunity window");
+        }
+        GuardCombatWindow confirmed = new GuardCombatWindow();
+        confirmed.awaitDamage("target", 0, 250, GuardSwingSource.SERVER_OBSERVED);
+        confirmed.observe("target", 0, 20, 0);
+        expect(confirmed.observe("target", 10, 14, 3), "real damage ends initial acquisition");
+        expect(!confirmed.ready(3, 10, 250), "confirmed damage retains the immunity window");
+        expect(confirmed.ready(8, 5, 250), "confirmed target opens the normal follow-up window");
         GuardAssist retry = new GuardAssist();
         retry.observe("click", "victim", 0);
         retry.attackSent(0, 250);
@@ -117,15 +150,21 @@ public final class GuardInputRelaySelfTest {
                 !retry.pending(6) && retry.pending(7),
                 "unacknowledged request permits one retry after round-trip feedback margin");
         retry.attackSent(7, 250);
-        expect(!retry.pending(14), "timeout retry is consumed once without creating a backlog");
+        expect(
+                !retry.pending(13) && retry.pending(14),
+                "active combat can retry a missed follow-up after feedback time");
+        retry.attackSent(28, 250);
+        expect(
+                !retry.pending(31),
+                "our own late attack cannot extend the guarded player's fight intent");
         GuardAssist retargeted = new GuardAssist();
         retargeted.observe("physical", "", 20);
         retargeted.retarget("actual");
         expect(
                 retargeted.pending(25)
                         && retargeted.victim().equals("actual")
-                        && !retargeted.pending(33),
-                "corrected victim retains the original intent expiry");
+                        && !retargeted.pending(50),
+                "corrected victim uses a bounded engagement deadline anchored to the original swing");
         expect(
                 !window.observe("victim", 4, 14, 12),
                 "ordinary hurt countdown is not another damage event");

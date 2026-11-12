@@ -23,7 +23,6 @@ public final class ClientSettings {
     public Vec3Point pitEntrance;
     public Vec3Point spawnPoint, dropRim;
     public double dropFloor = 63;
-    public boolean parkourEnabled = true;
     public static final String DEFAULT_CONTROLLER_NAME = "rocket770";
     public static final String DEFAULT_CONTROLLER_UUID = "fd299507-9e07-433f-a908-52dea48a821e";
     public String controllerName = DEFAULT_CONTROLLER_NAME,
@@ -135,8 +134,6 @@ public final class ClientSettings {
         if (spawnPoint != null) p.setProperty("navigation.spawn", spawnPoint.serialize());
         if (dropRim != null) p.setProperty("navigation.drop.rim", dropRim.serialize());
         p.setProperty("navigation.drop.floor", Double.toString(dropFloor));
-        p.setProperty("navigation.parkour", Boolean.toString(parkourEnabled));
-        p.setProperty("navigation.parkour.defaults", "enabled-v1");
         saveRegion(p, "training", trainingPit);
         StringBuilder route = new StringBuilder();
         for (Vec3Point waypoint : trainingRoute.all()) {
@@ -249,7 +246,6 @@ public final class ClientSettings {
         dropRim = ArenaPreset.DROP_RIM;
         dropFloor = ArenaPreset.FLOOR;
         pitEntrance = ArenaPreset.LANDING_HINT;
-        parkourEnabled = true;
         combatProfile = CombatProfile.BALANCED;
     }
 
@@ -325,7 +321,6 @@ public final class ClientSettings {
             dropRim = null;
         }
         if (!Double.isFinite(dropFloor)) dropRim = null;
-        parkourEnabled = Boolean.parseBoolean(p.getProperty("navigation.parkour", "true"));
     }
 
     private void loadTrainingRoute(Properties p) {

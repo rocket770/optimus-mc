@@ -68,7 +68,7 @@ public final class PlatformJumpSelfTest {
                 for(Vec3Point p:arc) expect(area.containsBody(p,.3,1.8) && geometry.free(CollisionGeometry.body(p)),"native arc remains in loaded clear body space");
                 Vec3Point end=arc.get(arc.size()-1);
                 expect(Math.abs(end.y-top)<.01 && geometry.standable(area,end),"actual slab top is the supported landing height");
-                GroundRoute ground=new GroundRoute(geometry,area,area,null,0,true,true);
+                GroundRoute ground=new GroundRoute(geometry,area,area,null,0,true);
                 List<GridPathfinder.Node> path=route(ground,start,landing);
                 expect(path.size()==2,"full planner exposes a complete diagonal parkour edge");
                 List<GridPathfinder.Node> local=LocalApproach.route(ground,start,landing);
@@ -80,13 +80,13 @@ public final class PlatformJumpSelfTest {
                 "unloaded space, ceiling or hazardous landing rejects a diagonal jump");
         }
         CollisionGeometry gap=platforms(2,1,1,1,0);
-        expect(route(new GroundRoute(gap,area,area,null,1,false,true),from,new Vec3Point(2.5,1,1.5)).isEmpty(),"optional parkour off cannot authorize a disconnected diagonal gap");
+        expect(route(new GroundRoute(gap,area,area,null,1,false),from,new Vec3Point(2.5,1,1.5)).isEmpty(),"unsupported jump physics cannot authorize a disconnected diagonal gap");
         // Native 1.8.9 reaches just under 1.25 blocks. A rounded 1.25
         // ceiling would admit a quarter-block ledge that the player cannot top.
         for(double rise:new double[]{1.25,1.5,2}) {
             CollisionGeometry tooHigh=platforms(1,0,1,1+rise,0);
             Vec3Point highLanding=new Vec3Point(1.5,1+rise,.5);
-            expect(!new GroundRoute(tooHigh,area,area,null,1,true,true).edgeClear(from,highLanding),
+            expect(!new GroundRoute(tooHigh,area,area,null,1,true).edgeClear(from,highLanding),
                 "adjacent climb above native jump height cannot use the simple-hop fallback: rise="+rise);
         }
         CollisionGeometry above=new CollisionGeometry((x,y,z)-> {
@@ -96,7 +96,7 @@ public final class PlatformJumpSelfTest {
             if(z==1 && ((x==2 && y==1) || (x==3 && y==2))) boxes.add(new CollisionGeometry.Box(x,y,z,x+1,y+1,z+1));
             return new CollisionGeometry.Cell(true,false,boxes);
         }).cached();
-        GroundRoute upward=new GroundRoute(above,area,area,null,1,true,true);
+        GroundRoute upward=new GroundRoute(above,area,area,null,1,true);
         List<GridPathfinder.Node> climb=route(upward,from,new Vec3Point(.5,4,.5));
         expect(climb.size()>=4,"player directly above can be reached by detouring out from under the roof and chaining climbs");
         boolean diagonalRise=false;

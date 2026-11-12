@@ -59,4 +59,127 @@ final class GuardSimulationCase {
                                         false));
         return cases;
     }
+
+    static List<GuardSimulationCase> releaseCases() {
+        List<GuardSimulationCase> cases = new ArrayList<>();
+        for (String input : new String[] {"keys", "observed"})
+            for (int ping : new int[] {0, 100, 250, 400})
+                for (int phase : new int[] {0, 25})
+                    for (int jitter : new int[] {0, 25})
+                        cases.add(
+                                new GuardSimulationCase(
+                                        "movement_release_"
+                                                + input
+                                                + "_"
+                                                + ping
+                                                + "_"
+                                                + phase
+                                                + "_"
+                                                + jitter,
+                                        ping,
+                                        phase,
+                                        jitter,
+                                        2,
+                                        0,
+                                        true,
+                                        false,
+                                        false));
+        return cases;
+    }
+
+    static List<GuardSimulationCase> engagementCases() {
+        List<GuardSimulationCase> cases = new ArrayList<>();
+        for (int ping : new int[] {200, 250, 300})
+            for (double gap : new double[] {2.6, 2.8, 3.0})
+                for (double kick : new double[] {.28, .4})
+                    cases.add(
+                            new GuardSimulationCase(
+                                    "assist_chase_" + ping + "_" + gap + "_" + kick,
+                                    ping,
+                                    0,
+                                    0,
+                                    gap,
+                                    kick,
+                                    true,
+                                    false,
+                                    true));
+        return cases;
+    }
+
+    static List<GuardSimulationCase> pressureCases() {
+        List<GuardSimulationCase> cases = new ArrayList<>();
+        for (String source : new String[] {"assist", "defense"})
+            for (int ping : new int[] {100, 250, 400})
+                for (int phase : new int[] {0, 25})
+                    for (int jitter : new int[] {0, 25})
+                        for (double gap : new double[] {2, 2.8})
+                            cases.add(
+                                    new GuardSimulationCase(
+                                            source
+                                                    + "_pressure_"
+                                                    + ping
+                                                    + "_"
+                                                    + phase
+                                                    + "_"
+                                                    + jitter
+                                                    + "_"
+                                                    + gap,
+                                            ping,
+                                            phase,
+                                            jitter,
+                                            gap,
+                                            0,
+                                            true,
+                                            false,
+                                            true));
+        return cases;
+    }
+
+    static List<GuardSimulationCase> travelCases() {
+        List<GuardSimulationCase> cases = new ArrayList<>();
+        for (String mode : new String[] {"stationary", "running", "damaged", "target"})
+            for (int ping : new int[] {100, 250, 400})
+                for (int phase : new int[] {0, 25})
+                    for (String input :
+                            mode.equals("target")
+                                    ? new String[] {"observed"}
+                                    : new String[] {"keys", "observed"})
+                        cases.add(
+                                new GuardSimulationCase(
+                                        "movement_far_"
+                                                + mode
+                                                + "_catchup_"
+                                                + input
+                                                + "_"
+                                                + ping
+                                                + "_"
+                                                + phase,
+                                        ping,
+                                        phase,
+                                        0,
+                                        2,
+                                        0,
+                                        true,
+                                        false,
+                                        false));
+        return cases;
+    }
+
+    static List<GuardSimulationCase> waitingCases() {
+        List<GuardSimulationCase> cases = new ArrayList<>();
+        for (String terrain : new String[] {"patrol", "island", "flight_return"})
+            for (int phase : new int[] {0, 25})
+                cases.add(
+                        new GuardSimulationCase(
+                                "movement_waiting_" + terrain + "_" + phase,
+                                250,
+                                phase,
+                                25,
+                                2,
+                                0,
+                                true,
+                                false,
+                                false));
+        return cases;
+    }
 }

@@ -9,7 +9,7 @@ buildscript {
 }
 apply plugin: 'net.minecraftforge.gradle.forge'
 
-version = '1.0.4'
+version = '1.0.10'
 group = 'dev.optimus'
 archivesBaseName = 'Optimus-Forge189'
 
@@ -72,6 +72,7 @@ selfTestClasses += [
     remoteControlSelfTest: 'dev.optimus.client.RemoteControlSelfTest',
     combatAimSelfTest: 'dev.optimus.client.CombatAimSelfTest',
     lobbyMovementSelfTest: 'dev.optimus.client.LobbyMovementSelfTest',
+    stairDescentSelfTest: 'dev.optimus.client.StairDescentSelfTest',
     terminalBridgeSelfTest: 'dev.optimus.client.TerminalBridgeSelfTest',
     platformJumpSelfTest: 'dev.optimus.client.PlatformJumpSelfTest',
     capturedParkourSelfTest: 'dev.optimus.core.CapturedParkourSelfTest',
@@ -99,16 +100,45 @@ selfTestClasses.each { taskName, testClass ->
 }
 check.dependsOn selfTestClasses.keySet()
 
-task guardParitySelfTest(type: JavaExec, dependsOn: testClasses) {
-    group = 'verification'
-    description = 'Compare native guard decisions with the saved pre-extraction reference.'
-    main = 'dev.optimus.client.GuardCombatSimulationSelfTest'
-    classpath = sourceSets.test.runtimeClasspath
-    systemProperty 'optimus.guardParity', 'true'
-    systemProperty 'optimus.guardReference', 'true'
-    systemProperty 'optimus.guardTrace', "$buildDir/guard-parity.csv"
+// Guard replay modes share the same native fixture and task configuration.
+def guardReplays = [
+    guardParitySelfTest: [
+        description: 'Compare native guard decisions with the saved movement reference.',
+        flags: ['guardParity', 'guardReference'], trace: 'guard-parity.csv'
+    ],
+    guardReleaseSelfTest: [
+        description: 'Check native stopping after movement key release across packet delays.',
+        flags: ['guardRelease'], trace: 'guard-release.csv'
+    ],
+    guardEngagementSelfTest: [
+        description: 'Check one guarded swing, approach, knockback and return to following.',
+        flags: ['guardEngagement'], trace: 'guard-engagement.csv'
+    ],
+    guardPressureSelfTest: [
+        description: 'Check target locks, approach and sustained assists after a single swing or defensive hit.',
+        flags: ['guardPressure'], trace: 'guard-pressure.csv'
+    ],
+    guardTravelSelfTest: [
+        description: 'Replay distant guard and target pursuit, including damage recovery.',
+        flags: ['guardTravel'], trace: 'guard-travel.csv'
+    ],
+    guardWaitingSelfTest: [
+        description: 'Replay a minute of waiting patrol and return to following, including confined terrain.',
+        flags: ['guardWaiting'], trace: 'guard-waiting.csv'
+    ]
+]
+guardReplays.each { taskName, replay ->
+    tasks.create(taskName, JavaExec) {
+        dependsOn testClasses
+        group = 'verification'
+        description = replay.description
+        main = 'dev.optimus.client.GuardCombatSimulationSelfTest'
+        classpath = sourceSets.test.runtimeClasspath
+        replay.flags.each { flag -> systemProperty "optimus.${flag}", 'true' }
+        systemProperty 'optimus.guardTrace', "$buildDir/${replay.trace}"
+    }
 }
-check.dependsOn guardParitySelfTest
+check.dependsOn guardReplays.keySet()
 
 // Optional cross-language verification after preparing a Python training fixture.
 task liveTrainingModelSelfTest(type: JavaExec, dependsOn: testClasses) {

@@ -326,6 +326,21 @@ public final class ClientEvents {
         if (CombatEquipment.selectEmpty(mc.thePlayer)) mc.playerController.updateController();
     }
 
+    private void observePitReturn() {
+        if (!enteredPit || mc.theWorld != sessionWorld || !alive() || playerInPit()) return;
+        telemetry.death(tickNo, "self_death_pit_return");
+        enteredPit = false;
+        returningAfterRespawn = true;
+        releaseKeys();
+        guard.suspend();
+        navigator.reset();
+        combat.resetFocus();
+        combat.deferClicks(tickNo);
+        entryGoal = roamGoal = null;
+        nextEntryResolveAt = nextRoamAt = roamUntil = 0;
+        traceEvent("pit return: returning to entry; clearing lobby menu if open");
+    }
+
     private void closeRespawnMenu() {
         if (returningAfterRespawn && run.mayControl() && enteredPit && playerInPit())
             returningAfterRespawn = false;
@@ -579,9 +594,7 @@ public final class ClientEvents {
                         + "; floor="
                         + s.dropFloor
                         + "; live landing="
-                        + point(entryGoal)
-                        + "; parkour="
-                        + s.parkourEnabled);
+                        + point(entryGoal));
         OptimusMod.notice(
                 "Controller="
                         + s.controllerName
@@ -665,13 +678,6 @@ public final class ClientEvents {
         OptimusMod.settings.applySuppliedArena(lobbySafety.lobby(), lobbySafety.instance());
         OptimusMod.settings.save();
         OptimusMod.notice("Pit preset loaded. F8 starts.");
-    }
-
-    void setParkour(boolean enabled) {
-        OptimusMod.settings.parkourEnabled = enabled;
-        OptimusMod.settings.save();
-        controlOptionsChanged();
-        OptimusMod.notice("Parkour " + (enabled ? "on" : "off") + ".");
     }
 
     void clearController() {
@@ -859,8 +865,6 @@ public final class ClientEvents {
                 remoteReply(
                         "!o start|stop|status | guard <player>/off | target | weapon sword/fist");
             } else if (!replies.isEmpty()) remoteReply(replies.get(replies.size() - 1));
-            else if (args[0].equals("parkour"))
-                remoteReply("Parkour " + (settings.parkourEnabled ? "on" : "off") + ".");
             else remoteReply("Done.");
             return true;
         } catch (IllegalArgumentException error) {
@@ -1079,8 +1083,7 @@ public final class ClientEvents {
         input.clearCombatInput();
         transitions();
         if (!armed) return;
-        if (enteredPit && mc.theWorld == sessionWorld && alive() && !playerInPit())
-            telemetry.death(tickNo, "self_death_pit_return");
+        observePitReturn();
         if (run.expired(now())) {
             stop("Lobby join/recovery timed out");
             return;
@@ -1313,7 +1316,11 @@ public final class ClientEvents {
         }
         if (roamGoal == null) {
             input.releaseMovement();
-            if (tickNo < nextRoamAt || !navigator.onSafeGround(pit)) return;
+            if (tickNo < nextRoamAt) return;
+            if (!navigator.onSafeGround(pit)) {
+                navigator.activity = "Roaming pit; waiting for supported footing";
+                return;
+            }
             roamGoal = navigator.beginPatrol(pit, patrolRandom);
             if (roamGoal == null) {
                 nextRoamAt = tickNo + 20;

@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.GZIPInputStream;
 
-/** Compares native decisions with captured pre-extraction behavior, including known limitations. */
+/** Compares native decisions with the saved movement reference, including known limitations. */
 final class GuardReplayParity {
     private GuardReplayParity() {}
 

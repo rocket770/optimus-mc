@@ -18,7 +18,6 @@ public final class TravelSprint {
         if (current == null
                 || waypoint == null
                 || goal == null
-                || waypoint.y < current.y - .1
                 || !area.containsBody(goal, .3, 1.8)
                 || !geometry.autoStepClear(current, waypoint, area)) return false;
         double distance = Math.sqrt(current.horizontalDistanceSq(waypoint));
@@ -33,6 +32,6 @@ public final class TravelSprint {
         // Follow actual stair tops through the supported run-out. Its nominal
         // height is only a starting hint, rather than a flat-ground constraint.
         Vec3Point runOut = geometry.walkEnd(current, ahead, area);
-        return runOut != null && runOut.y >= current.y - .1;
+        return runOut != null && runOut.y >= current.y - 3;
     }
 }

@@ -79,7 +79,7 @@ public final class NavigationOverlaySelfTest {
             SprintJump.Plan plan=SprintJump.plan(geometry,pit,start,goal,.15,.1274,.02548,.546);
             expect(plan!=null,"flat-floor fixture supplies a checked sprint jump");
             nav.commit(new LobbyNavigator.Step(LobbyNavigator.Status.MOVING,goal,true,false,true,plan),true,1);
-            set(nav,"plannedTerrain",new GroundRoute(geometry,pit,pit,null,1,true,true));
+            set(nav,"plannedTerrain",new GroundRoute(geometry,pit,pit,null,1,true));
             set(nav,"path",Arrays.asList(new GridPathfinder.Node(0,2,0),new GridPathfinder.Node(0,2,2),new GridPathfinder.Node(0,2,8)));set(nav,"index",1);
             NavigationView view=nav.debugView();
             expect(view.route.size()==3 && view.trajectory.size()>5,"snapshot exposes the completed route and nominal jump samples");

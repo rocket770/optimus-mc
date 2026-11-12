@@ -175,7 +175,7 @@ public final class RouteHintsSelfTest {
                 destination != null,
                 "one-hint fixture has a walkable destination outside the named landing area");
         final GridPathfinder.Node end = RouteHints.node(destination);
-        GroundRoute ground = new GroundRoute(live, pit, pit, null, 63, true, true);
+        GroundRoute ground = new GroundRoute(live, pit, pit, null, 63, true);
         final java.util.function.ToDoubleFunction<GridPathfinder.Node> estimate =
                 hints.estimateTo(destination, pit, true, key -> false);
         GridPathfinder.Goal goal =
@@ -364,7 +364,7 @@ public final class RouteHintsSelfTest {
                 "corridor query does not expand the whole collision map");
         expect(
                 hints.select(live, pit, a, b, false, key -> false) == null,
-                "parkour off excludes advanced ascent");
+                "unsupported jump physics excludes advanced ascent");
         expect(
                 hints.select(live, pit, a, b, true, key -> true) == null,
                 "temporarily rejected connections cannot be reselected");

@@ -92,7 +92,9 @@ public final class CommandSelfTest {
         parsed("!o target list", "list");
         parsed("!o target clear", "clear");
         parsed("!o profile balanced", "profile", "balanced");
-        parsed("!o parkour off", "parkour", "off");
+        rejects(
+                () -> RemoteCommand.parse("!o parkour off", "Bot_One"),
+                "removed travel command is rejected");
         parsed("!o seed -42", "seed", "-42");
         parsed("!o status", "status");
         parsed("!o commands", "help");
@@ -139,7 +141,6 @@ public final class CommandSelfTest {
                     "operator list",
                     "controller Evil_Main",
                     "profile baseline",
-                    "parkour off",
                     "seed 1",
                     "routes off",
                     "pit a",

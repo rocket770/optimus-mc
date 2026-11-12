@@ -133,18 +133,18 @@ public final class CombatMovementSelfTest {
         expect(!TravelSprint.allowed(map(true,false,false,false),pit,new Vec3Point(1.1,1,.5),new Vec3Point(1.3,1,.5),goal,false),"small waypoint never authorizes sprint into a nearby block face");
         expect(!TravelSprint.allowed(map(false,false,true,false),pit,new Vec3Point(1.1,1,.5),new Vec3Point(1.3,1,.5),goal,false),"unloaded run-out blocks sprint");
         expect(!TravelSprint.allowed(map(false,false,false,true),pit,new Vec3Point(1.1,1,.5),new Vec3Point(1.3,1,.5),goal,false),"missing support in run-out blocks sprint");
-        GroundRoute route=new GroundRoute(map(true,false,false,false).cached(),pit,pit,null,1,true,true);
+        GroundRoute route=new GroundRoute(map(true,false,false,false).cached(),pit,pit,null,1,true);
         List<Node> climb=LocalApproach.route(route,new Vec3Point(1.5,1,.5),new Vec3Point(2.5,2,.5));
         validate(route,climb,new Vec3Point(1.5,1,.5));
         expect(route.point(climb.get(climb.size()-1)).y==2,"complete local approach can plan onto a full block");
-        GroundRoute blocked=new GroundRoute(map(true,true,false,false).cached(),pit,pit,null,1,true,true);
+        GroundRoute blocked=new GroundRoute(map(true,true,false,false).cached(),pit,pit,null,1,true);
         expect(!blocked.edgeClear(new Vec3Point(1.5,1,.5),new Vec3Point(2.5,2,.5)),"low ceiling rejects full-block jump");
-        GroundRoute noJump=new GroundRoute(map(true,false,false,false).cached(),pit,pit,null,1,true,false);
+        GroundRoute noJump=new GroundRoute(map(true,false,false,false).cached(),pit,pit,null,1,false);
         expect(!noJump.edgeClear(new Vec3Point(1.5,1,.5),new Vec3Point(2.5,2,.5)),"unsupported jump effects cannot authorize a block climb");
         List<Node> detour=LocalApproach.route(route,new Vec3Point(1.5,1,.5),new Vec3Point(4.5,1,.5));
         validate(route,detour,new Vec3Point(1.5,1,.5));
         CollisionGeometry captured=CollisionReplaySelfTest.capture();PitRegion actual=new PitRegion();actual.setCornerA(new Vec3Point(-25,62.5,-127));actual.setCornerB(new Vec3Point(25,78,-77));
-        GroundRoute actualRoute=new GroundRoute(captured.cached(),actual,actual,null,63,true,true);
+        GroundRoute actualRoute=new GroundRoute(captured.cached(),actual,actual,null,63,true);
         for(Vec3Point start:Arrays.asList(new Vec3Point(-13.8,63.5,-116.9),new Vec3Point(.5,63,-100.5),new Vec3Point(-13.375,68.5,-105.223))) {
             Node aligned=actualRoute.start(start);
             if(aligned!=null) expect(actualRoute.edgeClear(start,actualRoute.point(aligned)),"captured stair/fractional-corner alignment remains collision checked");

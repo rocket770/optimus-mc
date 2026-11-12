@@ -9,15 +9,15 @@ import dev.optimus.core.navigation.GroundMotion;
 import dev.optimus.core.navigation.MotionProgress;
 import dev.optimus.core.navigation.NearbySteering;
 import dev.optimus.core.navigation.WalkSteering;
-import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.BlockPos;
 
 /** Chooses checked movement keys and braking for a resolved close-follow plan. */
 final class GuardSteering {
+    private static final double SETTLE_EXIT_DISTANCE_SQ = .16 * .16;
     private final GuardContext ctx;
     private final GuardCombat combat;
     private final MotionProgress followProgress = new MotionProgress();
-    private boolean settled;
+    private boolean settled, desktopMoving, coasting;
     private long directMoves, lastDirectTick = Long.MIN_VALUE;
 
     GuardSteering(GuardContext ctx, GuardCombat combat) {
@@ -38,7 +38,7 @@ final class GuardSteering {
     }
 
     void reset() {
-        settled = false;
+        settled = desktopMoving = coasting = false;
         followProgress.reset();
         lastDirectTick = Long.MIN_VALUE;
     }
@@ -61,7 +61,6 @@ final class GuardSteering {
             PitRegion pit,
             long tick,
             boolean beforeMovement) {
-        EntityPlayer player = observation.player;
         Vec3Point self = position(ctx.mc.thePlayer),
                 pose = observation.pose,
                 velocity = observation.velocity,
@@ -128,9 +127,22 @@ final class GuardSteering {
                 behind =
                         (self.x - pose.x) * -Math.sin(heading)
                                 + (self.z - pose.z) * Math.cos(heading);
+        // A delayed position estimate must not reapply movement after a local key release.
+        // Coast while native momentum decays, then resume ordinary position correction.
+        boolean moving = desktop != null && desktop.movement != NearbySteering.Input.NONE;
+        if (desktop != null && desktopMoving && !moving) coasting = true;
+        if (desktop == null
+                || moving
+                || knocked
+                || fighting
+                || !ctx.mc.thePlayer.onGround
+                || Math.max(Math.abs(ctx.mc.thePlayer.motionX), Math.abs(ctx.mc.thePlayer.motionZ))
+                        < .005) coasting = false;
+        desktopMoving = moving;
         boolean matchingInput =
                 desktop != null
                         && (desktop.movement != NearbySteering.Input.NONE
+                                || coasting
                                 || self.horizontalDistanceSq(goal) <= .1 * .1);
         if (matchingInput
                 && !fighting
@@ -196,12 +208,16 @@ final class GuardSteering {
                 || !quiet
                 || !ctx.mc.thePlayer.onGround
                 || copyingJump
-                || error > .16 * .16) settled = false;
+                || error > SETTLE_EXIT_DISTANCE_SQ) settled = false;
         else if (error < .12 * .12 && stop.horizontalDistanceSq(goal) < .08 * .08) settled = true;
         if (settled && safe.test(NearbySteering.Input.NONE)) input = NearbySteering.Input.NONE;
         boolean stuck =
                 !beforeMovement
-                        && followProgress.stuck(self, tick, error > .36, ctx.mc.thePlayer.onGround);
+                        && followProgress.stuck(
+                                self,
+                                tick,
+                                error > SETTLE_EXIT_DISTANCE_SQ,
+                                ctx.mc.thePlayer.onGround);
         if ((stuck || input == NearbySteering.Input.NONE && error > .64)
                 && ctx.mc.thePlayer.onGround) return new Result(input, false, false, true);
         boolean jump =
@@ -212,7 +228,8 @@ final class GuardSteering {
         return new Result(input, running && input.forward > 0, jump, false);
     }
 
-    boolean safeInput(NearbySteering.Input input, boolean sprint, boolean sneak, PitRegion pit) {
+    private boolean safeInput(
+            NearbySteering.Input input, boolean sprint, boolean sneak, PitRegion pit) {
         if (ctx.mc.thePlayer.onGround)
             return ctx.navigator.safeGuardInput(input, sprint, sneak, pit);
         Vec3Point from = position(ctx.mc.thePlayer);

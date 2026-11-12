@@ -6,6 +6,7 @@ dev.optimus.core.CommandSelfTest
 dev.optimus.core.CollisionReplaySelfTest
 dev.optimus.core.CombatFollowSelfTest
 dev.optimus.core.PitPatrolSelfTest
+dev.optimus.core.GroundContactSelfTest
 dev.optimus.core.MovementUpgradeSelfTest
 dev.optimus.core.CombatClicksSelfTest
 dev.optimus.core.CombatMovementSelfTest

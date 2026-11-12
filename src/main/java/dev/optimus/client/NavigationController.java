@@ -181,10 +181,9 @@ final class NavigationController {
                                     : NearbySteering.Input.FORWARD)
                             : NearbySteering.Input.NONE;
         if (correcting) input = navigator.correctionInput(step.waypoint, area);
-        boolean trying =
-                !step.brake
-                        && (input != NearbySteering.Input.NONE
-                                || correcting && dx * dx + dz * dz > .09);
+        // A corner correction is still an attempted route step when every key
+        // candidate is blocked. Let the progress watchdog recover that deadlock.
+        boolean trying = !step.brake && (input != NearbySteering.Input.NONE || correcting);
         if (input != NearbySteering.Input.NONE
                 && !precise
                 && !correcting

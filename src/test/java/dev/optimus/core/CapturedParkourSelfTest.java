@@ -42,7 +42,7 @@ public final class CapturedParkourSelfTest {
         Map<String,Integer> count=new LinkedHashMap<>(),attempts=new HashMap<>();
         for(String category:new String[]{"cardinal_climb","diagonal_climb","diagonal_gap","slab_jump","slab_walk"}) count.put(category,0);
         List<String> report=new ArrayList<>();report.add("kind,from_x,from_y,from_z,to_x,to_y,to_z,block_id,mode,arc_frames,end_x,end_y,end_z,route_nodes");
-        GroundRoute terrain=new GroundRoute(geometry,pit,pit,null,63,true,true);
+        GroundRoute terrain=new GroundRoute(geometry,pit,pit,null,63,true);
         for(Surface from:surfaces.values()) {
             if(count.values().stream().allMatch(value->value>=2)) break;
             for(int dx=-2;dx<=2;dx++) for(int dz=-2;dz<=2;dz++) {
@@ -79,7 +79,7 @@ public final class CapturedParkourSelfTest {
                     },1024);
                     search.advance(1024,0);
                     expect(search.state()==GridPathfinder.State.FOUND,"actual captured jump pair is reachable by the full planner");
-                    GroundRoute fresh=new GroundRoute(geometry,pit,pit,null,63,true,true);
+                    GroundRoute fresh=new GroundRoute(geometry,pit,pit,null,63,true);
                     for(int i=1;i<search.path().size();i++) expect(fresh.traversable(search.path().get(i-1),search.path().get(i)),"captured route edges independently revalidate");
                     count.put(kind,count.get(kind)+1);
                     Vec3Point end=arc.isEmpty()?to.point:arc.get(arc.size()-1);

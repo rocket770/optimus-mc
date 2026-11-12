@@ -6,6 +6,7 @@ import dev.optimus.core.geometry.CollisionGeometry;
 import dev.optimus.core.geometry.PitRegion;
 import dev.optimus.core.geometry.Vec3Point;
 import dev.optimus.core.navigation.GridPathfinder;
+import dev.optimus.core.navigation.GroundRoute;
 import dev.optimus.core.navigation.NearbySteering;
 import dev.optimus.core.navigation.PlatformJump;
 import dev.optimus.core.navigation.SprintGap;
@@ -84,7 +85,6 @@ public final class LobbyMovementSelfTest {
         mc.gameSettings=new GameSettings();singleton.set(null,mc);
         OptimusMod.settings=new ClientSettings(Files.createTempDirectory("optimus-movement-test").toFile());
         PitRegion area=OptimusMod.settings.hypixelPit;area.setCornerA(new Vec3Point(-5,0,-5));area.setCornerB(new Vec3Point(20,10,10));
-        OptimusMod.settings.parkourEnabled=true;
         try {
             LobbyNavigator nav=new LobbyNavigator(mc);CollisionGeometry clear=floor(false);set(nav,"geometry",clear);
             position(player,.5,1,.5,true);Vec3Point goal=new Vec3Point(12.5,1,.5);
@@ -117,6 +117,31 @@ public final class LobbyMovementSelfTest {
             LobbyNavigator.Step replacing=nav.step(goal,area,false,113);
             expect(get(nav,"search")!=null && replacing.status==LobbyNavigator.Status.MOVING,
                 "actual pending replacement search follows its already completed safe route");
+            nav.reset();
+            CollisionGeometry ledge=new CollisionGeometry((x,y,z)->new CollisionGeometry.Cell(true,false,
+                x>=0 && y==0?Collections.singletonList(new CollisionGeometry.Box(x,y,z,x+1,y+1,z+1)):Collections.emptyList()));
+            set(nav,"geometry",ledge);position(player,-.2,1,.5,true);
+            player.motionX=player.motionY=player.motionZ=0;
+            expect(nav.onSafeGround(area),"native edge support under the outer foot box permits patrol selection");
+            expect(nav.beginPatrol(area,new Random(731))!=null,"an edge-supported player can choose a checked patrol without a manual nudge");
+            nav.reset();set(nav,"geometry",clear);position(player,.5,1,.5,false);
+            expect(nav.onSafeGround(area),"exact floor contact can outlast a stale native grounded flag");
+            GroundRoute pendingTerrain=new GroundRoute(clear.cached(),area,area,null,1,true);
+            GridPathfinder.Search pending=new GridPathfinder.Search(new GridPathfinder.Node(0,2,0),pendingTerrain,
+                new GridPathfinder.Goal() {
+                    public boolean reached(GridPathfinder.Node n) { return n.x==12 && n.y2==2 && n.z==0; }
+                    public double estimate(GridPathfinder.Node n) { return Math.abs(12-n.x)+Math.abs(n.z); }
+                },65536);
+            pending.advance(2,0);
+            expect(pending.visited()==2 && pending.state()==GridPathfinder.State.SEARCHING,"fixture retains a two-cell search frontier");
+            set(nav,"search",pending);set(nav,"searchTerrain",pendingTerrain);set(nav,"plannedGoal",goal);set(nav,"targetMode",false);
+            nav.step(goal,area,false,114);
+            expect(pending.visited()>2,"supported idle search resumes its existing frontier without a movement key");
+            expect(!player.onGround,"planning does not forge the native grounded flag");
+            nav.reset();position(player,.5,1.03,.5,false);player.motionY=-.0784;
+            expect(!nav.onSafeGround(area),"near-floor airborne positions still wait for an actual landing");
+            position(player,.5,1,.5,false);player.motionY=.42;
+            expect(!nav.onSafeGround(area),"a rising takeoff cannot become grounded merely because feet touch the floor");
             nav.reset();set(nav,"geometry",floor(true));position(player,.5,1,.5,true);
             player.rotationYaw=-90;player.motionX=player.motionY=player.motionZ=0;
             Vec3Point blockGoal=new Vec3Point(1.5,2,.5);LobbyNavigator.Step climb=nav.step(blockGoal,area,false,200);

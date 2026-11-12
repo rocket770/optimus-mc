@@ -172,8 +172,7 @@ final class GuardNavigationAdapter implements GuardNavigation {
 
     LobbyNavigator.Step sprintJump(Vec3Point goal, PitRegion pit) {
         Vec3Point from = self();
-        if (!OptimusMod.settings.parkourEnabled
-                || jumpInProgress()
+        if (jumpInProgress()
                 || preparingGap()
                 || !mc.thePlayer.isSprinting()
                 || mc.thePlayer.hurtTime > 0

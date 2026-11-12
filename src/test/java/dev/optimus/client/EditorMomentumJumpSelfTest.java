@@ -43,7 +43,7 @@ public final class EditorMomentumJumpSelfTest {
         PitRegion pit=new PitRegion();pit.setCornerA(new Vec3Point(-25,62.5,-127));pit.setCornerB(new Vec3Point(25,78,-77));
         Vec3Point roof=new Vec3Point(-20.5,67.5,-100.5),wall=new Vec3Point(-21.5,66.5,-106.5);
         expect(EditorMomentumJump.find(geometry,pit,roof,wall)!=null,"reported lower-roof to wall connection has a checked chain");
-        expect(!new GroundRoute(geometry,pit,pit,null,63,true,true).edgeClear(roof,wall),"ordinary routing still rejects this as a single jump");
+        expect(!new GroundRoute(geometry,pit,pit,null,63,true).edgeClear(roof,wall),"ordinary routing still rejects this as a single jump");
         expect(EditorMomentumJump.find(new CollisionGeometry((x,y,z)->CollisionGeometry.Cell.UNLOADED),pit,roof,wall)==null,"unloaded terrain cannot produce a chain");
         PitRegion low=new PitRegion();low.setCornerA(pit.cornerA());low.setCornerB(new Vec3Point(25,70,-77));
         expect(EditorMomentumJump.find(geometry,low,roof,wall)==null,"the complete first and second jump need headroom inside the region");

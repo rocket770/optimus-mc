@@ -95,8 +95,7 @@ final class AdvancedJumpController {
     Step step(CollisionGeometry live, PitRegion area, long tick) {
         activity = null;
         Vec3Point current = self();
-        if (!OptimusMod.settings.parkourEnabled || !normalHintPhysics())
-            return failed("Advanced hint physics changed");
+        if (!normalHintPhysics()) return failed("Advanced hint physics changed");
         if (hintJump.kind == SpecificPitJump.KIND) return specificPitJumpStep(live, area, tick);
         if (hintFrames != null) {
             int elapsed = (int) (tick - hintFlightAt);

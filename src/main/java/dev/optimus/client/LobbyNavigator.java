@@ -148,6 +148,7 @@ final class LobbyNavigator {
 
     private final Minecraft mc;
     private final AdvancedJumpController advanced;
+    private final StairDescent descent;
     private List<Node> path = Collections.emptyList();
     private List<Vec3Point> debugArc = Collections.emptyList();
     private Vec3Point debugWaypoint;
@@ -204,7 +205,6 @@ final class LobbyNavigator {
                 s.hypixelPit,
                 s.dropRim,
                 s.dropFloor,
-                s.parkourEnabled,
                 !mc.thePlayer.isPotionActive(Potion.jump),
                 (from, to) ->
                         preparation.allowed(from, to, decisionTick)
@@ -253,6 +253,7 @@ final class LobbyNavigator {
         this.mc = mc;
         this.geometry = createGeometry();
         this.advanced = new AdvancedJumpController(mc);
+        descent = new StairDescent(mc);
     }
 
     void clearDebug() {
@@ -352,6 +353,7 @@ final class LobbyNavigator {
         pathHints = null;
         searchHints = null;
         advanced.reset();
+        descent.reset();
         path = Collections.emptyList();
         index = 0;
         plannedGoal = progress = null;
@@ -392,6 +394,7 @@ final class LobbyNavigator {
         pathHints = null;
         searchHints = null;
         advanced.reset();
+        descent.reset();
         failure = reason;
         activity = reason + "; retrying";
         path = Collections.emptyList();
@@ -720,7 +723,7 @@ final class LobbyNavigator {
                 || Math.hypot(mc.thePlayer.motionX, mc.thePlayer.motionZ) > .2) return null;
         CollisionGeometry live = geometry.cached();
         GroundRoute route =
-                new GroundRoute(live, area, OptimusMod.settings.hypixelPit, null, 63, false, true);
+                new GroundRoute(live, area, OptimusMod.settings.hypixelPit, null, 63, true);
         if (!live.standable(area, current)
                 || !live.standable(area, landing)
                 || !route.edgeClear(current, landing)) return null;
@@ -828,8 +831,7 @@ final class LobbyNavigator {
 
     private Step nearbyGap(Vec3Point goal, PitRegion area, long tick, boolean fromRoute) {
         decisionTick = tick;
-        if (!OptimusMod.settings.parkourEnabled
-                || !mc.thePlayer.onGround
+        if (!mc.thePlayer.onGround
                 || jumpInProgress()
                 || mc.thePlayer.hurtTime > 0
                 || mc.thePlayer.isPotionActive(Potion.jump)
@@ -1004,7 +1006,9 @@ final class LobbyNavigator {
     }
 
     boolean onSafeGround(PitRegion area) {
-        return mc.thePlayer != null && mc.thePlayer.onGround && standable(area, self());
+        return mc.thePlayer != null
+                && (mc.thePlayer.onGround || mc.thePlayer.motionY <= 0)
+                && geometry.touchingGround(area, self());
     }
 
     Vec3Point committedGoal() {
@@ -1158,7 +1162,8 @@ final class LobbyNavigator {
     }
 
     boolean precise(Step step, PitRegion area) {
-        return step.alignOnly
+        return descent.active()
+                || step.alignOnly
                 || step.jump
                 || step.brake
                 || jumpInProgress()
@@ -1175,8 +1180,7 @@ final class LobbyNavigator {
     }
 
     Step sprintJump(Vec3Point goal, PitRegion area, boolean chasing) {
-        if (!OptimusMod.settings.parkourEnabled
-                || jumpInProgress()
+        if (jumpInProgress()
                 || preparingGap()
                 || !mc.thePlayer.onGround
                 || !mc.thePlayer.isSprinting()
@@ -1492,8 +1496,7 @@ final class LobbyNavigator {
             progressAt = tick;
         }
         if (!gapCommitted
-                && mc.thePlayer.onGround
-                && standable(area, current)
+                && onSafeGround(area)
                 && goalReached(current, destination, target, area)) {
             reset();
             return new Step(Status.ARRIVED, null, false);
@@ -1508,7 +1511,14 @@ final class LobbyNavigator {
                     target
                             ? "Pursuit obstructed; refreshing route"
                             : "Path obstructed or stuck for four seconds");
-        if (!mc.thePlayer.onGround) {
+        if (!jumpInProgress() && !preparingGap()) {
+            Step downhill = descent.step(geometry.cached(), area, destination, target);
+            if (downhill != null) {
+                activity = "Descending checked stairs";
+                return downhill;
+            }
+        }
+        if (!mc.thePlayer.onGround && !onSafeGround(area)) {
             wasAirborne = true;
             if (airborneAt == 0) airborneAt = tick;
             if (tick - airborneAt > 60) return failed("No supported landing");
@@ -1608,8 +1618,7 @@ final class LobbyNavigator {
                             : searchHints.estimateTo(
                                     destination,
                                     area,
-                                    OptimusMod.settings.parkourEnabled
-                                            && !mc.thePlayer.isPotionActive(Potion.jump),
+                                    !mc.thePlayer.isPotionActive(Potion.jump),
                                     key -> rejectedHints.getOrDefault(key, 0L) > decisionTick);
             GridPathfinder.Goal goal =
                     new GridPathfinder.Goal() {
@@ -1647,8 +1656,7 @@ final class LobbyNavigator {
                                     route,
                                     geometry.cached(),
                                     area,
-                                    OptimusMod.settings.parkourEnabled
-                                            && !mc.thePlayer.isPotionActive(Potion.jump),
+                                    !mc.thePlayer.isPotionActive(Potion.jump),
                                     key -> rejectedHints.getOrDefault(key, 0L) > decisionTick);
             // Hints are optional edges in this search, not a route installed
             // before ordinary walking, drops and live connections can compete.
@@ -1728,6 +1736,17 @@ final class LobbyNavigator {
                             p -> live.autoStepClear(current, p, area));
             Vec3Point walkTo =
                     live.autoStepClear(current, destination, area) ? destination : pathPoint(index);
+            // An eight-block hint edge can be farther from our actual position.
+            // Check a shorter segment instead of repeatedly returning to its origin.
+            if (current.horizontalDistanceSq(walkTo) > 64
+                    && index > 0
+                    && live.autoStepClear(pathPoint(index - 1), walkTo, area)) {
+                Vec3Point middle =
+                        new Vec3Point(
+                                (current.x + walkTo.x) / 2, current.y, (current.z + walkTo.z) / 2);
+                Vec3Point approach = live.walkEnd(current, middle, area);
+                if (approach != null) walkTo = approach;
+            }
             if (live.autoStepClear(current, walkTo, area)) {
                 // A saved incoming jump is unnecessary when this landing can be
                 // reached on foot from our actual position. Keep its metadata
@@ -1769,8 +1788,11 @@ final class LobbyNavigator {
             return new Step(Status.WAITING, null, false);
         }
         if (drop) {
-            activity = "Walking down to lower landing";
-            return new Step(Status.MOVING, next, false);
+            activity = "Descending to lower landing";
+            boolean sprint =
+                    TravelSprint.allowed(
+                            geometry.cached(), area, current, next, destination, target);
+            return new Step(Status.MOVING, next, false, false, sprint, null);
         }
         if (!autoStep(current, next, area)) {
             Step normal = prepareAdjacentClimb(next, area);
@@ -1887,6 +1909,7 @@ final class LobbyNavigator {
         Step step = advanced.step(geometry.cached(), area, tick);
         if (step == null) {
             advanced.reset();
+            descent.reset();
             index++;
             progress = null;
         } else if (step.status == Status.FAILED) {

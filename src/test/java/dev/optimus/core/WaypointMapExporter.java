@@ -34,7 +34,7 @@ public final class WaypointMapExporter {
         }
         PitRegion pit=new PitRegion();pit.setCornerA(new Vec3Point(-25,62.5,-127));pit.setCornerB(new Vec3Point(25,78,-77));
         CollisionGeometry geometry=CollisionReplaySelfTest.capture(resource).cached();
-        GroundRoute route=new GroundRoute(geometry,pit,pit,null,63,true,true);
+        GroundRoute route=new GroundRoute(geometry,pit,pit,null,63,true);
         Map<Node,Integer> ids=new HashMap<>();Map<String,Integer> unique=new HashMap<>();
         List<Node> nodes=new ArrayList<>();List<Vec3Point> points=new ArrayList<>();
         for(int x=-25;x<=25;x++) for(int z=-127;z<=-77;z++) for(int y2=125;y2<=153;y2++) {

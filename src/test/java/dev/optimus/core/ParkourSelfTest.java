@@ -42,30 +42,14 @@ public final class ParkourSelfTest {
     }
     public static void main(String[] args) throws Exception {
         ClientSettings settings=new ClientSettings(Files.createTempDirectory("optimus-parkour").toFile());
-        expect(settings.parkourEnabled && settings.dropRim==null && !settings.arenaConfigured(),"parkour is the default while unconfigured clients remain unable to start");
-        java.io.File legacyDirectory=Files.createTempDirectory("optimus-parkour-default").toFile();
-        Properties legacy=new Properties();legacy.setProperty("navigation.parkour","false");
-        legacy.setProperty("combat.profile","paced");legacy.setProperty("combat.seed","73");
-        legacy.setProperty("target.names","FixtureUser");legacy.setProperty("hypixel.a",new Vec3Point(-12,63,-120).serialize());
-        legacy.setProperty("hypixel.b",new Vec3Point(12,76,-80).serialize());
-        try(java.io.FileOutputStream out=new java.io.FileOutputStream(new java.io.File(legacyDirectory,"optimus.properties"))) { legacy.store(out,"Legacy settings"); }
-        ClientSettings defaultUpgrade=new ClientSettings(legacyDirectory);
-        expect(!defaultUpgrade.parkourEnabled,"saved parkour off is respected without rewriting the config");
-        expect(defaultUpgrade.combatProfile==CombatProfile.PACED && defaultUpgrade.combatSeed==73
-            && defaultUpgrade.whitelist.contains("FixtureUser") && defaultUpgrade.hypixelPit.cornerA().x==-12,
-            "default migration preserves unrelated profile, seed, targets and custom geometry");
-        expect(!new ClientSettings(legacyDirectory).parkourEnabled,"saved parkour off survives restart");
-        defaultUpgrade.parkourEnabled=false;defaultUpgrade.save();
-        expect(!new ClientSettings(legacyDirectory).parkourEnabled,"a subsequent optional off override survives restart");
-        defaultUpgrade.parkourEnabled=true;defaultUpgrade.save();
-        expect(new ClientSettings(legacyDirectory).parkourEnabled,"optional on override also persists");
+        expect(settings.dropRim==null && !settings.arenaConfigured(),"unconfigured clients remain unable to start");
         java.nio.file.Path malformed=Files.createTempDirectory("optimus-corrupt-properties");
         String corrupt="broken="+'\\'+"uZZZZ\n";
         Files.write(malformed.resolve("optimus.properties"),corrupt.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         ClientSettings corruptSettings=new ClientSettings(malformed.toFile());
         expect(!corruptSettings.arenaConfigured() && corruptSettings.controllerName.isEmpty(),"malformed Properties escape cannot crash initialization or authorize gameplay");
         expect(new String(Files.readAllBytes(malformed.resolve("optimus.properties")),java.nio.charset.StandardCharsets.UTF_8).equals(corrupt),
-            "unreadable configuration is preserved rather than overwritten by migration");
+            "unreadable configuration is preserved rather than overwritten while loading");
         try { settings.applySuppliedArena("bedwarslobby2","dynamiclobbyX"); throw new AssertionError("wrong game lobby accepted"); }
         catch (IllegalArgumentException expected) { checks++; }
         try { settings.applySuppliedArena("duelslobby1",""); throw new AssertionError("missing instance accepted"); }
@@ -81,10 +65,10 @@ public final class ParkourSelfTest {
         expect(settings.navigationArea.containsBody(settings.spawnPoint,0.3,1.8)
             && settings.navigationArea.containsBody(settings.dropRim,0.3,1.8),"inferred nav envelope covers spawn and entry");
         expect(settings.pitEntrance.z<settings.spawnPoint.z,"entrance direction is negative Z, not assumed spawn facing");
-        expect(settings.parkourEnabled && settings.dropFloor==63,"supplied preset explicitly enables bounded parkour and named drop");
+        expect(settings.dropFloor==63,"supplied preset provides the named drop floor");
         settings.save();ClientSettings loaded=new ClientSettings(settings.traceDirectory().getParentFile());
-        expect(loaded.navigationConfigured() && loaded.parkourEnabled && loaded.dropRim.y==78
-            && loaded.spawnPoint.y==69.5 && loaded.dropFloor==63,"drop, parkour, spawn and lobby binding persist");
+        expect(loaded.navigationConfigured() && loaded.dropRim.y==78
+            && loaded.spawnPoint.y==69.5 && loaded.dropFloor==63,"drop, spawn and lobby binding persist");
         for(Vec3Point edge:new Vec3Point[]{new Vec3Point(-24.5,63,-100),new Vec3Point(24.5,63,-100),new Vec3Point(0,63,-126.5),new Vec3Point(0,63,-77.5)})
             expect(loaded.hypixelPit.containsBody(edge,0.3,1.8),"added edge block includes full player body");
         expect(!loaded.hypixelPit.containsBody(new Vec3Point(25,63,-100),0.3,1.8),"expanded outer boundary still requires entire body inside");

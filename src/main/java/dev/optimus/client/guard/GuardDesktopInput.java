@@ -5,6 +5,7 @@ import static dev.optimus.client.guard.GuardContext.measuredPosition;
 import dev.optimus.core.geometry.PitRegion;
 import dev.optimus.core.geometry.Vec3Point;
 import dev.optimus.core.guard.GuardInputPrediction;
+import dev.optimus.core.guard.GuardSwingSource;
 import net.minecraft.client.network.NetworkPlayerInfo;
 import net.minecraft.entity.player.EntityPlayer;
 
@@ -130,7 +131,8 @@ final class GuardDesktopInput {
                 pose = measured;
             } else pose = checked;
             if (desktop.attack && (!desktopAttack || tick - lastDesktopSwing >= 4)) {
-                combat.observeSwing("windows:" + (++desktopSwing), "", pit, tick, false);
+                combat.observeSwing(
+                        "windows:" + (++desktopSwing), "", pit, tick, GuardSwingSource.LOCAL_KEYS);
                 lastDesktopSwing = tick;
             }
             desktopAttack = desktop.attack;
