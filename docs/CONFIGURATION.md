@@ -12,3 +12,7 @@ The client reads these filenames directly. Saved preferences and unknown propert
 `/o status` reports configuration errors. `/o guard`, `/o routes`, `/o profile` and `/o seed` save changes without stopping an active run. F9 always stops.
 
 Fresh settings use the configured default controller. `/o controller Name` pairs another account; `/o controller off` disables chat control.
+
+Use `/o exceptions add Name` to exclude a player from targeting and attacks in every mode, including Target All and Guard defense. Names match exactly and ignore case. Exceptions override the named target list and persist in `target.exceptions` in `optimus.properties`. Changes apply immediately during an active run.
+
+`/o exceptions remove Name`, `/o exceptions list` and `/o exceptions clear` manage the same list. `/o target exceptions` and `/o guard exceptions` accept the same subcommands. Clearing targets or switching modes preserves exceptions. Paired controllers and operators can manage exceptions through chat control.

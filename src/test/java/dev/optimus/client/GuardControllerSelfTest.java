@@ -1444,6 +1444,92 @@ public final class GuardControllerSelfTest {
             expect(
                     Math.abs(CombatTurn.wrap(bot.rotationYaw)) < 45,
                     "an unresolved swing cannot replace combat aim with the guarded player's backward view");
+            int beforeException = controller.attacks;
+            commands.processCommand(bot, new String[] {"exceptions", "add", "opponent"});
+            expect(
+                    settings.exceptions.contains(rival.name)
+                            && (boolean) get(events, "armed")
+                            && !events.targetAllowed(pit, rival)
+                            && !guard.permits(rival, 1214),
+                    "adding an exception immediately blocks a pending guard target during an active run");
+            request.invoke(get(events, "combat"), rival, CombatProfile.BALANCED);
+            expect(
+                    !((CombatController) get(events, "combat")).assistAttack(rival, true, 1214)
+                            && controller.attacks == beforeException,
+                    "normal and assist attack entry points reject an excluded player");
+            for (long tick = 1215; tick <= 1225; tick++) step(events, guard, pit, tick);
+            expect(controller.attacks == beforeException, "queued guard retries cannot hit exceptions");
+            guard.suspend();
+            set(guard, "listening", true);
+            position(second, 15, 15);
+            position(bot, 0, -GuardFollow.OFFSET);
+            position(leader, 0, 0);
+            position(rival, 0, 1.5);
+            leader.rotationYawHead = 0;
+            leader.hurtTime = 0;
+            leader.isSwingInProgress = rival.isSwingInProgress = false;
+            step(events, guard, pit, 1230);
+            swing(guard, leader, rival, pit, 1231);
+            expect(
+                    get(guard, "assistTarget") == null,
+                    "explicit guard victims on the exception list cannot be selected");
+            swing(guard, leader, null, pit, 1232);
+            expect(
+                    get(guard, "assistTarget") == null,
+                    "guard aim-based selection skips excluded players");
+            rival.rotationYawHead = 180;
+            rival.isSwingInProgress = true;
+            rival.swingProgressInt = 0;
+            leader.hurtTime = 10;
+            for (long tick = 1233; tick <= 1242; tick++) step(events, guard, pit, tick);
+            expect(
+                    get(guard, "assistTarget") == null && controller.attacks == beforeException,
+                    "guard defense cannot retaliate against an excluded attacker");
+            settings.guardName = settings.guardUuid = "";
+            guard.suspend();
+            CombatController combat = (CombatController) get(events, "combat");
+            Method focused =
+                    CombatController.class.getDeclaredMethod(
+                            "focusedOpponent", PitRegion.class, Vec3Point.class);
+            focused.setAccessible(true);
+            position(leader, 15, -15);
+            position(bot, 0, 0);
+            commands.processCommand(bot, new String[] {"target", "all"});
+            Object selected = focused.invoke(combat, pit, positionPoint(bot));
+            expect(
+                    selected != null && selected != rival,
+                    "target-all selection skips the nearby excluded player");
+            settings.whitelist.add(rival.name);
+            commands.processCommand(bot, new String[] {"target", "listed"});
+            expect(!events.targetAllowed(pit, rival), "listed mode preserves exceptions");
+            commands.processCommand(bot, new String[] {"target", "clear"});
+            expect(
+                    settings.exceptions.contains(rival.name),
+                    "clearing targets preserves the shared exception list");
+            commands.processCommand(bot, new String[] {"target", "all"});
+            request.invoke(combat, rival, CombatProfile.BALANCED);
+            expect(controller.attacks == beforeException, "target-all attack requests honor exceptions");
+            expect(
+                    commands.addTabCompletionOptions(
+                                    bot, new String[] {"guard", "exceptions", "remove", "o"}, null)
+                            .contains("opponent"),
+                    "guard exception removal completes saved names");
+            commands.processCommand(
+                    bot, new String[] {"guard", "exceptions", "remove", "OPPONENT"});
+            expect(
+                    events.targetAllowed(pit, rival)
+                            && focused.invoke(combat, pit, positionPoint(bot)) == rival,
+                    "removing an exception restores eligibility and nearest-target selection");
+            commands.processCommand(bot, new String[] {"target", "exceptions", "add", rival.name});
+            expect(
+                    focused.invoke(combat, pit, positionPoint(bot)) != rival,
+                    "adding an exception releases an already selected target-all opponent");
+            commands.processCommand(bot, new String[] {"exceptions", "add", "invalid-name"});
+            expect(settings.exceptions.all().size() == 1, "invalid exception names leave the list intact");
+            commands.processCommand(bot, new String[] {"exceptions", "clear"});
+            expect(settings.exceptions.all().isEmpty(), "exception clear uses the shared saved list");
+            settings.guardName = leader.name;
+            settings.guardUuid = leader.id.toString();
             safety.invalidate();
             step(events, guard, pit, 1080);
             expect(

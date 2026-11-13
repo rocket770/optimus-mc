@@ -91,6 +91,10 @@ public final class CommandSelfTest {
         parsed("!o target", "list");
         parsed("!o target list", "list");
         parsed("!o target clear", "clear");
+        parsed("!o exceptions add Friend_One", "exceptions", "add", "Friend_One");
+        parsed("!o target exceptions remove Friend_One", "exceptions", "remove", "Friend_One");
+        parsed("!o guard exceptions list", "exceptions", "list");
+        parsed("!o GUARD EXCEPTIONS clear", "exceptions", "clear");
         parsed("!o profile balanced", "profile", "balanced");
         rejects(
                 () -> RemoteCommand.parse("!o parkour off", "Bot_One"),
@@ -117,6 +121,9 @@ public final class CommandSelfTest {
                     "target clear",
                     "target all",
                     "target listed",
+                    "exceptions add Friend_One",
+                    "target exceptions remove Friend_One",
+                    "guard exceptions clear",
                     "add Rival_2",
                     "remove Rival_2",
                     "list",

@@ -20,6 +20,7 @@ public final class RemoteCommand {
                             "clear",
                             "all",
                             "listed",
+                            "exceptions",
                             "status",
                             "help",
                             "profile",
@@ -31,7 +32,7 @@ public final class RemoteCommand {
             new HashSet<>(
                     Arrays.asList(
                             "start", "stop", "add", "remove", "list", "clear", "all", "listed",
-                            "weapon", "guard"));
+                            "weapon", "guard", "exceptions"));
 
     private RemoteCommand() {}
 

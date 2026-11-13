@@ -274,7 +274,9 @@ public final class ClientEvents {
     }
 
     boolean targetAllowed(PitRegion pit, EntityPlayer target) {
-        return target != mc.thePlayer
+        return target != null
+                && target != mc.thePlayer
+                && !OptimusMod.settings.exceptions.contains(target.getName())
                 && target.isEntityAlive()
                 && target.worldObj == mc.theWorld
                 && pit.containsBody(position(target), 0.3, 1.8)

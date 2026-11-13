@@ -20,6 +20,12 @@ public final class CommandInput {
         if (raw.length == 0) return new String[] {"help"};
         String[] args = raw.clone();
         String action = args[0].toLowerCase(Locale.ROOT);
+        if ("guard".equals(action)
+                && args.length > 1
+                && args[1].equalsIgnoreCase("exceptions")) {
+            args = Arrays.copyOfRange(args, 1, args.length);
+            action = "exceptions";
+        }
         if ("target".equals(action) || "targets".equals(action)) {
             if (args.length == 1) return new String[] {"list"};
             args = Arrays.copyOfRange(args, 1, args.length);
@@ -29,9 +35,10 @@ public final class CommandInput {
                     && !"list".equals(action)
                     && !"clear".equals(action)
                     && !"all".equals(action)
-                    && !"listed".equals(action))
+                    && !"listed".equals(action)
+                    && !"exceptions".equals(action))
                 throw new IllegalArgumentException(
-                        "Usage: /o target add <name> | remove <name> | list | clear | all | listed");
+                        "Usage: /o target add <name> | remove <name> | list | clear | all | listed | exceptions");
         }
         if ("startz".equals(action) || "on".equals(action)) action = "start";
         if ("stopz".equals(action) || "off".equals(action)) action = "stop";

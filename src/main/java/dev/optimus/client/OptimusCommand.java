@@ -67,6 +67,9 @@ public final class OptimusCommand extends CommandBase {
         ClientSettings settings = OptimusMod.settings;
         Minecraft mc = Minecraft.getMinecraft();
         switch (action) {
+            case "exceptions":
+                handleExceptions(settings, args);
+                return;
             case "guard":
                 notice(
                         remoteReplies != null
@@ -262,6 +265,7 @@ public final class OptimusCommand extends CommandBase {
                     "startz",
                     "stop",
                     "target",
+                    "exceptions",
                     "status",
                     "controller",
                     "operator",
@@ -281,7 +285,8 @@ public final class OptimusCommand extends CommandBase {
                     "visuals",
                     "map");
         if (args[0].equalsIgnoreCase("guard") && args.length == 2)
-            return getListOfStringsMatchingLastWord(args, "off", "status", "keys", "share");
+            return getListOfStringsMatchingLastWord(
+                    args, "off", "status", "keys", "share", "exceptions");
         if (args[0].equalsIgnoreCase("guard")
                 && args.length == 3
                 && args[1].equalsIgnoreCase("keys"))
@@ -299,7 +304,17 @@ public final class OptimusCommand extends CommandBase {
         boolean target = args[0].equalsIgnoreCase("target") || args[0].equalsIgnoreCase("targets");
         if (target && args.length == 2)
             return getListOfStringsMatchingLastWord(
-                    args, "add", "remove", "list", "clear", "all", "listed");
+                    args, "add", "remove", "list", "clear", "all", "listed", "exceptions");
+        int exceptionsIndex = args[0].equalsIgnoreCase("exceptions") ? 0 : 1;
+        if ((exceptionsIndex == 0 || target || args[0].equalsIgnoreCase("guard"))
+                && args.length > exceptionsIndex
+                && args[exceptionsIndex].equalsIgnoreCase("exceptions")) {
+            if (args.length == exceptionsIndex + 2)
+                return getListOfStringsMatchingLastWord(args, "add", "remove", "list", "clear");
+            if (args.length == exceptionsIndex + 3
+                    && args[exceptionsIndex + 1].equalsIgnoreCase("remove"))
+                return getListOfStringsMatchingLastWord(args, OptimusMod.settings.exceptions.all());
+        }
         if (args.length == 3
                 && args[0].equalsIgnoreCase("operator")
                 && args[1].equalsIgnoreCase("remove"))
@@ -334,6 +349,7 @@ public final class OptimusCommand extends CommandBase {
         notice("/o map export <name> [radius 8-64] | status | cancel (loaded terrain only)");
         notice("/o start | stop | status (F8 starts, F9 stops)");
         notice("/o target add <name> | remove <name> | list | clear | all | listed");
+        notice("/o exceptions add <name> | remove <name> | list | clear (all modes)");
         notice("/o weapon sword|fist (fist uses empty hotbar slot 2)");
         notice(
                 "/o operator add <name> | remove <name> | list | clear (targets, weapons and start/stop)");
@@ -346,6 +362,32 @@ public final class OptimusCommand extends CommandBase {
         notice("/o controller <main name> pairs chat control: !o [all|@BotName] <command>");
         notice("/o pit a|b saves pit corners | /o entrance saves the entry point");
         notice("/o preset supplied loads saved coordinates | /o locraw checks the lobby");
+    }
+
+    private void handleExceptions(ClientSettings settings, String[] args) {
+        if (args.length == 1 || args.length == 2 && args[1].equalsIgnoreCase("list")) {
+            notice("Exceptions " + settings.exceptions.all());
+            return;
+        }
+        if (args.length == 3 && args[1].equalsIgnoreCase("add")) {
+            if (!settings.exceptions.add(args[2])) {
+                notice("Invalid name or already on the exception list.");
+                return;
+            }
+        } else if (args.length == 3 && args[1].equalsIgnoreCase("remove")) {
+            if (!settings.exceptions.remove(args[2])) {
+                notice("Not on the exception list.");
+                return;
+            }
+        } else if (args.length == 2 && args[1].equalsIgnoreCase("clear")) {
+            settings.exceptions.clear();
+        } else {
+            notice("Usage: /o exceptions add <name> | remove <name> | list | clear");
+            return;
+        }
+        settings.save();
+        OptimusMod.events.targetsChanged();
+        notice("Exceptions " + settings.exceptions.all());
     }
 
     private void handleVisuals(ClientSettings settings, String[] args) {

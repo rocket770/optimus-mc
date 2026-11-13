@@ -17,6 +17,7 @@ import java.util.TreeMap;
 /** Persistent config stored under .minecraft/config/optimus.properties. */
 public final class ClientSettings {
     public final TargetWhitelist whitelist = new TargetWhitelist();
+    public final TargetWhitelist exceptions = new TargetWhitelist();
     public final PitRegion hypixelPit = new PitRegion();
     public String pitLobby = "", pitInstance = "";
     public final PitRegion navigationArea = new PitRegion();
@@ -128,6 +129,7 @@ public final class ClientSettings {
         p.setProperty("combat.profile", combatProfile.id());
         p.setProperty("combat.seed", Long.toString(combatSeed));
         p.setProperty("target.names", String.join(",", whitelist.all()));
+        p.setProperty("target.exceptions", String.join(",", exceptions.all()));
         saveRegion(p, "hypixel", hypixelPit);
         saveRegion(p, "navigation", navigationArea);
         if (pitEntrance != null) p.setProperty("navigation.entrance", pitEntrance.serialize());
@@ -160,11 +162,12 @@ public final class ClientSettings {
     }
 
     public boolean targets(String name) {
-        return targetAll || whitelist.contains(name);
+        return !exceptions.contains(name) && (targetAll || whitelist.contains(name));
     }
 
     public String targetSummary() {
-        return targetAll ? "all pit players" : whitelist.all().toString();
+        String targets = targetAll ? "all pit players" : whitelist.all().toString();
+        return targets + (exceptions.all().isEmpty() ? "" : " except " + exceptions.all());
     }
 
     public boolean operatorMatches(String name, String uuid) {
@@ -304,6 +307,9 @@ public final class ClientSettings {
         }
         for (String username : p.getProperty("target.names", "").split(",")) {
             if (!username.trim().isEmpty()) whitelist.add(username.trim());
+        }
+        for (String username : p.getProperty("target.exceptions", "").split(",")) {
+            if (!username.trim().isEmpty()) exceptions.add(username.trim());
         }
     }
 

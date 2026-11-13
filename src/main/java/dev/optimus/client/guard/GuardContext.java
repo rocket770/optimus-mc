@@ -36,9 +36,11 @@ final class GuardContext {
 
     boolean protects(EntityPlayer player) {
         ClientSettings settings = settings();
-        return enabled()
-                && (settings.guardUuid.equals(player.getUniqueID().toString())
-                        || settings.guardName.equalsIgnoreCase(player.getName()));
+        return player != null
+                && (settings.exceptions.contains(player.getName())
+                        || enabled()
+                                && (settings.guardUuid.equals(player.getUniqueID().toString())
+                                        || settings.guardName.equalsIgnoreCase(player.getName())));
     }
 
     boolean present(EntityPlayer player, PitRegion pit) {

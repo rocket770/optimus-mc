@@ -67,7 +67,18 @@ public final class SettingsPersistenceSelfTest {
         expect(
                 settings.arenaConfigured() && settings.trainingRoute.all().size() == 2,
                 "geometry and legacy route data remain readable");
+        expect(settings.exceptions.all().isEmpty(), "legacy configs default to no exceptions");
+        settings.exceptions.add("Target_One");
+        expect(!settings.targets("target_one"), "exceptions override target-all ignoring case");
+        expect(settings.targets("Target_Two"), "other target-all players remain eligible");
+        settings.targetAll = false;
+        expect(!settings.targets("TARGET_ONE"), "exceptions override explicitly listed targets");
+        expect(settings.targets("Target_Two"), "other listed players remain eligible");
+        settings.targetAll = true;
         settings.save();
+        expect(
+                new ClientSettings(root.toFile()).exceptions.contains("target_one"),
+                "exceptions persist across reloads");
         expect(
                 PropertiesStore.read(primary.toFile())
                         .getProperty("future.setting")
@@ -75,6 +86,7 @@ public final class SettingsPersistenceSelfTest {
                 "ordinary saves retain unknown keys");
         settings.operators.clear();
         settings.whitelist.clear();
+        settings.exceptions.clear();
         settings.targetAll = false;
         settings.guardName = settings.guardUuid = "";
         settings.hypixelPit.clear();
@@ -83,6 +95,7 @@ public final class SettingsPersistenceSelfTest {
         expect(
                 cleared.operators.isEmpty()
                         && cleared.whitelist.all().isEmpty()
+                        && cleared.exceptions.all().isEmpty()
                         && !cleared.targetAll,
                 "cleared operators and targets do not reappear from retained properties");
         expect(
