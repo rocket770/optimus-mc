@@ -2,6 +2,15 @@
 
 Java 8 is required.
 
+Headless runtime isolation and server identity: `clientRuntimeSelfTest headlessConnectionSelfTest`. Launcher provisioning checks:
+`python -m unittest discover -s headless/tests -v`. See the [headless guide](../headless/README.md)
+for a real offline client startup and the separate live-server smoke test.
+
+Headless recovery: `sessionRecoverySelfTest headlessRecoverySelfTest`. These cover
+limbo evidence, Duels lobby 1 selection, normal verification before resumed movement,
+bounded reconnect/probe timing, unknown-screen timeout, container closure, death
+screens, preserving intent across world changes and cancelling everything on stop.
+
 ```text
 ./gradlew --no-daemon build
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-core-tests.ps1

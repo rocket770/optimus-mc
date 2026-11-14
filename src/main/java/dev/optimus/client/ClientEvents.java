@@ -44,6 +44,35 @@ public final class ClientEvents {
     private final LobbySafety lobbySafety = new LobbySafety();
     private final RunSafety run = new RunSafety();
     private final RemoteControl remoteControl = new RemoteControl();
+    private final HeadlessRecovery recovery;
+    private final HeadlessRecovery.Host recoveryHost = new HeadlessRecovery.Host() {
+        @Override
+        public boolean connected() {
+            return watchReady() && mc.thePlayer != null && mc.theWorld != null
+                    && ServerSafety.isHypixel(connectedServer()) && now() >= settleUntil;
+        }
+
+        @Override
+        public void probe() {
+            sendLocationRequest();
+        }
+
+        @Override
+        public void lobbyCommand(String command) {
+            sendLobbyCommand(command);
+        }
+
+        @Override
+        public void resume() {
+            start(true, true);
+            if (!armed) recovery.cancel();
+        }
+
+        @Override
+        public void fail(String reason) {
+            stop(reason);
+        }
+    };
     private final PitRegion lobbyTravelArea = LobbyTravel.area();
     private final LobbyNavigator navigator = new LobbyNavigator(mc);
     private CombatTrace trace;
@@ -77,6 +106,11 @@ public final class ClientEvents {
     private final KillFeed killFeed = new KillFeed();
 
     ClientEvents() {
+        this(new HeadlessRecovery(OptimusMod.runtime.headless(), Minecraft.getMinecraft()));
+    }
+
+    ClientEvents(HeadlessRecovery recovery) {
+        this.recovery = recovery;
         input = new MovementInput(mc);
         learning =
                 new LearningSession(new java.io.File(mc.mcDataDir, "config"), OptimusMod.VERSION);
@@ -215,7 +249,8 @@ public final class ClientEvents {
     private void ensureTransitionWatch() {
         NetworkManager manager = networkManager();
         if (manager == watchedManager) return;
-        stop("Connection changed");
+        if (recovery.interrupt(now())) stopInternal("Connection changed; locating lobby", true);
+        else stop("Connection changed");
         lobbySafety.invalidate();
         watchedManager = manager;
         transitionWatch = null;
@@ -386,6 +421,13 @@ public final class ClientEvents {
     }
 
     void stop(String explanation) {
+        stopInternal(explanation, false);
+    }
+
+    /** Releases gameplay immediately; controlled interruptions may retain explicit run intent. */
+    private void stopInternal(String explanation, boolean preserveRecovery) {
+        boolean recovering = recovery.recovering();
+        if (!preserveRecovery) recovery.cancel();
         boolean previous = armed;
         if (previous) input.clearCombatInput();
         armed = false;
@@ -441,7 +483,7 @@ public final class ClientEvents {
             trace = null;
         }
         // The stop command supplies its own acknowledgement.
-        if (previous && !"Manual stop".equals(explanation))
+        if ((previous || recovering) && !"Manual stop".equals(explanation))
             OptimusMod.notice("Stopped: " + explanation);
     }
 
@@ -486,9 +528,14 @@ public final class ClientEvents {
     }
 
     void start(boolean fromController) {
-        stop("New session");
+        start(fromController, false);
+    }
+
+    private void start(boolean fromController, boolean resuming) {
+        stopInternal("New session", resuming);
         if (fromController && RemoteControl.closeOnStart(mc.currentScreen))
             mc.displayGuiScreen(null);
+        recovery.prepareStart(fromController);
         if (!watchReady()
                 || mc.isSingleplayer()
                 || !ServerSafety.isHypixel(connectedServer())
@@ -518,6 +565,7 @@ public final class ClientEvents {
         mc.gameSettings.pauseOnLostFocus =
                 remoteControl.keepActive(mc.gameSettings.pauseOnLostFocus);
         armed = true;
+        if (!resuming) recovery.arm();
         learning.start();
         run.startChecking(now());
         patrolRandom.setSeed(OptimusMod.settings.combatSeed);
@@ -533,7 +581,8 @@ public final class ClientEvents {
     }
 
     private void sendLobbyCommand(String command) {
-        if (!armed || !watchReady() || !transitionWatch.authorizeLobbyCommand(command)) {
+        if ((!armed && !recovery.recovering()) || !watchReady()
+                || !transitionWatch.authorizeLobbyCommand(command)) {
             stop("Cannot issue authorized lobby command");
             return;
         }
@@ -938,6 +987,16 @@ public final class ClientEvents {
             JsonElement parsed = new JsonParser().parse(raw);
             if (!parsed.isJsonObject()) throw new IllegalArgumentException("not an object");
             JsonObject json = parsed.getAsJsonObject();
+            if (watchReady() && lobbySafety.awaitingReply(connectedServer(), mc.theWorld, now())) {
+                if ("limbo".equals(stringField(json, "server")) && recovery.interrupt(now()))
+                    stopInternal("Limbo observed; recovering lobby", true);
+                if (recovery.recovering()) {
+                    recovery.location(stringField(json, "server"), stringField(json, "gametype"),
+                            stringField(json, "lobbyname"), json.has("mode") || json.has("map"), now());
+                    lobbySafety.invalidate();
+                    return;
+                }
+            }
             boolean accepted =
                     watchReady()
                             && lobbySafety.confirm(
@@ -984,6 +1043,14 @@ public final class ClientEvents {
         releaseKeys();
         navigator.reset();
         settleUntil = now() + 1000;
+        if (recovery.recovering()) {
+            recovery.interrupt(now());
+            return;
+        }
+        if (!run.joining() && recovery.interrupt(now())) {
+            stopInternal("World changed; locating lobby", true);
+            return;
+        }
         run.worldTransfer();
         if (!run.running()) stop("Unexpected world transfer");
     }
@@ -1000,7 +1067,8 @@ public final class ClientEvents {
 
     private void transitions() {
         if (!watchReady()) {
-            stop("Connection/observer unavailable");
+            if (recovery.interrupt(now())) stopInternal("Connection interrupted; recovering", true);
+            else stop("Connection/observer unavailable");
             return;
         }
         long serial = transitionWatch.serial(),
@@ -1011,7 +1079,8 @@ public final class ClientEvents {
             return;
         }
         if (hard != seenHard && !run.joining()) {
-            stop("Unexpected server join");
+            if (recovery.interrupt(now())) stopInternal("Server changed; locating lobby", true);
+            else stop("Unexpected server join");
             return;
         }
         if (serial != seenSerial) {
@@ -1035,6 +1104,7 @@ public final class ClientEvents {
     public void onTick(TickEvent.ClientTickEvent event) {
         guard.publish();
         if (event.phase == TickEvent.Phase.START) {
+            OptimusMod.runtime.tick(mc);
             ensureTransitionWatch();
             int stopCode = OptimusMod.stopKey.getKeyCode();
             boolean emergency =
@@ -1067,10 +1137,22 @@ public final class ClientEvents {
         } else {
             tickNo++;
             if (armed
+                    && !OptimusMod.runtime.headless()
                     && OptimusMod.settings.debugVisuals
                     && mc.theWorld != null
                     && mc.thePlayer != null)
                 navigationOverlay.observe(mc.theWorld, position(mc.thePlayer), tickNo);
+        }
+        if (recovery.recovering()) {
+            releaseKeys();
+            if (event.phase == TickEvent.Phase.START) recovery.tick(now(), recoveryHost);
+            return;
+        }
+        if (event.phase == TickEvent.Phase.START && armed
+                && (isVerifiedLobby() || run.phase() == RunSafety.Phase.RECOVERING)
+                && !recovery.menus(now())) {
+            stop("Unknown menu blocked headless navigation for 30 seconds");
+            return;
         }
         if (!armed) {
             releaseKeys();
@@ -1343,7 +1425,8 @@ public final class ClientEvents {
 
     @SubscribeEvent
     public void onRenderWorld(RenderWorldLastEvent event) {
-        if (!armed
+        if (OptimusMod.runtime.headless()
+                || !armed
                 || OptimusMod.settings == null
                 || !OptimusMod.settings.debugVisuals
                 || mc.theWorld == null
@@ -1354,6 +1437,7 @@ public final class ClientEvents {
 
     @SubscribeEvent
     public void onOverlay(RenderGameOverlayEvent.Text event) {
+        if (OptimusMod.runtime.headless()) return;
         if (OptimusMod.mapExports != null && OptimusMod.mapExports.active())
             event.left.add("[O] " + OptimusMod.mapExports.status());
         if (mc.theWorld == null || mc.thePlayer == null) return;
@@ -1391,6 +1475,7 @@ public final class ClientEvents {
     }
 
     private String runLabel() {
+        if (recovery.recovering()) return "Recovering connection/lobby";
         switch (run.phase()) {
             case CHECK_LOBBY:
                 return "Checking current lobby";

@@ -1,5 +1,6 @@
 package dev.optimus.client;
 
+import dev.optimus.client.runtime.ClientRuntime;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.util.ChatComponentText;
@@ -22,6 +23,7 @@ import org.lwjgl.input.Keyboard;
 public final class OptimusMod {
     public static final String MODID = "optimus";
     public static final String VERSION = "1.0.10";
+    static final ClientRuntime runtime = ClientRuntime.fromSystemProperties();
     static ClientSettings settings;
     static ClientEvents events;
     static KeyBinding toggleKey;
@@ -71,6 +73,7 @@ public final class OptimusMod {
 
     @Mod.EventHandler
     public void init(FMLInitializationEvent event) {
+        runtime.initialize(Minecraft.getMinecraft());
         toggleKey = new KeyBinding("Optimus: toggle Duels lobby bot", Keyboard.KEY_F8, "Optimus");
         stopKey = new KeyBinding("Optimus: emergency stop", Keyboard.KEY_F9, "Optimus");
         ClientRegistry.registerKeyBinding(toggleKey);
@@ -138,6 +141,7 @@ public final class OptimusMod {
             return;
         }
         Minecraft mc = Minecraft.getMinecraft();
+        if (runtime.headless()) System.out.println("[Optimus] " + message);
         if (mc.thePlayer != null) {
             mc.thePlayer.addChatMessage(
                     new ChatComponentText(
@@ -145,7 +149,7 @@ public final class OptimusMod {
                                     + "[Optimus] "
                                     + EnumChatFormatting.RESET
                                     + message));
-        } else {
+        } else if (!runtime.headless()) {
             System.out.println("[Optimus] " + message);
         }
     }

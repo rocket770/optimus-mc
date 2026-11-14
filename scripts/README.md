@@ -13,3 +13,5 @@ Generated reports belong in `diagnostics/` or `build/`, not the source tree.
 - `find-python.ps1`: shared Python 3.9+ discovery for the training wrappers.
 
 See [ML collection and training](../docs/ML.md).
+
+Headless provisioning and launch code lives in [headless/](../headless/README.md).

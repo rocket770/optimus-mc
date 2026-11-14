@@ -59,6 +59,9 @@ file('scripts/core-test-suites.txt').readLines('UTF-8')
         selfTestClasses[taskName] = testClass
     }
 selfTestClasses += [
+    clientRuntimeSelfTest: 'dev.optimus.client.ClientRuntimeSelfTest',
+    headlessConnectionSelfTest: 'dev.optimus.client.runtime.HeadlessConnectionSelfTest',
+    headlessRecoverySelfTest: 'dev.optimus.client.HeadlessRecoverySelfTest',
     guardControllerSelfTest: 'dev.optimus.client.GuardControllerSelfTest',
     guardCombatSimulationSelfTest: 'dev.optimus.client.GuardCombatSimulationSelfTest',
     guardInputRelaySelfTest: 'dev.optimus.client.guard.GuardInputRelaySelfTest',
@@ -227,7 +230,7 @@ task terminalBundle(type: Zip, dependsOn: reobfJar) {
 
 task releaseBundle(type: Zip, dependsOn: [reobfJar, check, verifyPitExport, exportWaypointMap]) {
     group = 'distribution'
-    description = 'Package the verified Optimus mod with its existing offline editor and terminal.'
+    description = 'Package the verified Optimus mod with its editor, terminal and headless launcher.'
     archiveName = "${archivesBaseName}-${version}-release.zip"
     destinationDir = file("$buildDir/libs")
     from(jar.archivePath)
@@ -235,6 +238,9 @@ task releaseBundle(type: Zip, dependsOn: [reobfJar, check, verifyPitExport, expo
         from('editor') { include 'index.html', 'style.css', 'bootstrap.js', 'app.js', 'graph.js', 'pit-map.js', 'README.md', 'map/**', 'vendor/**' }
     }
     into('terminal') { from('terminal') { include 'Optimus-Terminal.cmd', 'Optimus-Terminal.ps1', 'README.txt' } }
+    into('headless') {
+        from('headless') { include 'run.py', 'Optimus-Headless.ps1', 'dependencies.json', 'README.md', 'optimus_headless/*.py' }
+    }
     into('ml') {
         from('ml') { include 'run.py', 'optimus_training/**', 'tests/**', 'README.md', '*.example'; exclude '**/__pycache__/**', '**/*.pyc' }
     }
@@ -277,6 +283,8 @@ task sourceBundle(type: Zip, dependsOn: [prepareSourceBundle, exportWaypointMap]
         include 'build.gradle', 'settings.gradle', 'README.md', 'LICENSE', 'gradlew', 'gradlew.bat'
         include 'gradle/wrapper/**'
         include 'src/**', 'scripts/**', 'terminal/**', 'docs/**', 'examples/**'
+        include 'headless/run.py', 'headless/Optimus-Headless.ps1', 'headless/dependencies.json', 'headless/README.md'
+        include 'headless/optimus_headless/*.py', 'headless/tests/*.py'
         include 'ml/run.py', 'ml/optimus_training/**', 'ml/tests/**', 'ml/README.md', 'ml/*.example'
         include 'exports/Hypixel-Duels-Pit-2026-10-15.zip', 'exports/Hypixel-Duels-Pit-2026-10-15.schematic', 'exports/README.md'
         include 'diagnostics/verification.txt', 'diagnostics/captured-navigation-summary.csv', 'DISCLAIMER.md'

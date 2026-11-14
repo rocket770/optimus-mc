@@ -1,0 +1,35 @@
+{
+  "forge": "11.15.1.2318",
+  "launchers": {
+    "linux-arm64": {
+      "name": "headlessmc-launcher-linux-arm64",
+      "url": "https://github.com/headlesshq/headlessmc/releases/download/3.0.0-RC8/headlessmc-launcher-linux-arm64",
+      "sha256": "0d5298df7f344b529cb63c1203e8e25ccb0f3bb58d6795e38ad8f3cf6c331dec"
+    },
+    "linux-x64": {
+      "name": "headlessmc-launcher-linux-x64",
+      "url": "https://github.com/headlesshq/headlessmc/releases/download/3.0.0-RC8/headlessmc-launcher-linux-x64",
+      "sha256": "62bbcd85344470bc1c11e08be4eda33ce06aeff2ed2931c87964640d5a733ece"
+    },
+    "macos-arm64": {
+      "name": "headlessmc-launcher-macos-arm64",
+      "url": "https://github.com/headlesshq/headlessmc/releases/download/3.0.0-RC8/headlessmc-launcher-macos-arm64",
+      "sha256": "fc9d636a715a206e11480869c2ef7e97a9ba919e84d56b376aa301360d105060"
+    },
+    "macos-x64": {
+      "name": "headlessmc-launcher-macos-x64",
+      "url": "https://github.com/headlesshq/headlessmc/releases/download/3.0.0-RC8/headlessmc-launcher-macos-x64",
+      "sha256": "d37e9d206b0245f13f9855c16c3ebb1554542fa694b10bcaacf2afe5b928fb67"
+    },
+    "windows-x64": {
+      "name": "headlessmc-launcher-windows-x64.exe",
+      "url": "https://github.com/headlesshq/headlessmc/releases/download/3.0.0-RC8/headlessmc-launcher-windows-x64.exe",
+      "sha256": "72c42ddd7240f08c79615bbf5e9bef15d209d3e75017f4ef9d9dde9f5028f935"
+    }
+  },
+  "specifics": {
+    "name": "hmc-specifics-1.8.9-forge-3.0.1.jar",
+    "url": "https://github.com/headlesshq/hmc-specifics/releases/download/1.8.9-3.0.1/hmc-specifics-1.8.9-forge-3.0.1.jar",
+    "sha256": "04f518e9e972f44491bdada71362c064c9612c93509a347893fb826268d0362f"
+  }
+}

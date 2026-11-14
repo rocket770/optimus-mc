@@ -1,5 +1,6 @@
 # Dependency-free suites shared by Gradle and the standalone test runners.
 dev.optimus.core.CoreSelfTest
+dev.optimus.core.SessionRecoverySelfTest
 dev.optimus.core.NavigationSelfTest
 dev.optimus.core.ParkourSelfTest
 dev.optimus.core.CommandSelfTest

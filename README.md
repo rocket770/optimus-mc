@@ -6,6 +6,7 @@ Put the JAR in `mods/`, restart Minecraft, then run `/o help`. Chat commands use
 
 - [Running the bot and commands](docs/BOT.md)
 - [Guard mode](docs/GUARD.md)
+- [Headless client setup](headless/README.md)
 - [Settings](docs/CONFIGURATION.md)
 - [Combat profiles](docs/COMBAT.md)
 - [Optional movement ML and training](docs/ML.md)
